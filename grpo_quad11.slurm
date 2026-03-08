@@ -63,8 +63,8 @@ conda activate myenv
 set -u
 
 BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"
-TRAIN_PARQUET="${BASE_DIR}/Dataset/quadratic_grpo_train.parquet"
-TEST_PARQUET="${BASE_DIR}/Dataset/quadratic_grpo_test.parquet"
+TRAIN_PARQUET="${BASE_DIR}/Dataset/quad_diverse_train.parquet"   # 1510 rows, 10 prompt templates
+TEST_PARQUET="${BASE_DIR}/Dataset/quad_diverse_eval.parquet"     # 400 rows, 4 held-out templates
 MODEL_DIR="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
 OUT_DIR="${BASE_DIR}/Output/result_${SLURM_JOB_ID}"
 mkdir -p "${OUT_DIR}"

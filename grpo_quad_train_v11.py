@@ -1084,18 +1084,25 @@ def main():
         "Using the quadratic formula: x = (5 +/- 1)/2 giving x=3 and x=2.\n"
         "\\boxed{2, 3}\n"
     )
-    def build_prompt(equation: str) -> str:
-        equation = normalize_equation_text(equation)
+    def build_prompt(equation: str, user_message: str = None) -> str:
+        # If the dataset provides a pre-baked user message (diverse phrasing),
+        # use it directly; otherwise fall back to the original default.
+        if user_message:
+            user_content = user_message
+        else:
+            equation = normalize_equation_text(equation)
+            user_content = f"Solve the quadratic equation for integer roots: {equation}"
         msgs = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Solve the quadratic equation for integer roots: {equation}"},
+            {"role": "user", "content": user_content},
         ]
         if getattr(tokenizer, "chat_template", None):
             return tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
-        return f"SYSTEM: {SYSTEM_PROMPT}\nUSER: Solve: {equation}\nASSISTANT:"
+        return f"SYSTEM: {SYSTEM_PROMPT}\nUSER: {user_content}\nASSISTANT:"
 
     def to_prompt(ex: Dict[str, Any]) -> Dict[str, Any]:
-        ex["prompt"] = build_prompt(ex.get("equation", ""))
+        # user_message column is optional (backward-compatible with old parquets)
+        ex["prompt"] = build_prompt(ex.get("equation", ""), ex.get("user_message"))
         return ex
 
     def validate_required_columns(ds, split_name: str) -> None:
