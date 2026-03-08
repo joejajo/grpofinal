@@ -21,8 +21,8 @@
 #  warmup_steps            60          100           longer warmup for harder task
 #  beta (KL penalty)       0.001       0.002         stronger anchor; harder task drifts more
 #  num_generations         8           12            wider group -> better advantage estimation
-#  per_device_batch_size   1           2             effective=32, prompts/step=32/12~=2
-#  grad_accum_steps        16          16            kept
+#  per_device_batch_size   1           2             effective=24, prompts/step=24/12=2
+#  grad_accum_steps        16          12            reduced 16→12 so 2*12=24 divisible by num_generations=12
 #  temperature             0.70        0.80          harder problems need more generation diversity
 #  top_p                   0.95        0.95          unchanged
 #  lora_r                  32          48            more capacity for harder arithmetic
@@ -92,7 +92,7 @@ accelerate launch \
   --beta                    0.002 \
   --num_generations         12 \
   --per_device_batch_size   2 \
-  --grad_accum_steps        16 \
+  --grad_accum_steps        12 \
   --max_prompt_length       512 \
   --max_completion_length   1024 \
   \
