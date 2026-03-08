@@ -82,7 +82,7 @@ SCRIPT="${BASE_DIR}/grpo_quad_train_v11.py"
 accelerate launch \
   --num_processes 1 \
   --num_machines 1 \
-  --mixed_precision fp16 \
+  --mixed_precision bf16 \
   --dynamo_backend no \
   --main_process_port 29500 \
   "${SCRIPT}" \

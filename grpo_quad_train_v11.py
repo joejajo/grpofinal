@@ -1161,7 +1161,7 @@ def main():
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
-        torch_dtype=torch.float16,
+        torch_dtype=torch.bfloat16,   # v11-fix: Qwen2.5 is bf16-native; fp16 risks NaN on Ampere
         attn_implementation=attn_impl,
     )
     model.config.pad_token_id = tokenizer.pad_token_id
@@ -1214,8 +1214,8 @@ def main():
         temperature=args.temperature,
         top_p=args.top_p,
 
-        fp16=True,
-        bf16=False,
+        fp16=False,
+        bf16=True,    # v11-fix: Qwen2.5 is bf16-native; RTX 3080 (Ampere) supports bf16
 
         loss_type="dr_grpo",
         beta=args.beta,
