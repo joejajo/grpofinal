@@ -102,7 +102,8 @@ accelerate launch \
   --eval_max_new_tokens     512 \
   \
   --disable_jsonl_export \
-  --generation_csv_path     "${OUT_DIR}/generation_outputs.csv" \
+  --train_csv_path          "${OUT_DIR}/train_generations.csv" \
+  --eval_csv_path           "${OUT_DIR}/eval_generations.csv" \
   --generation_csv_every_steps 50 \
   --grpo_max_samples        0 \
   \

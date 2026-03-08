@@ -92,6 +92,7 @@ LAST_EVAL_STATS: Dict[str, float] = {}
 GEN_CSV_PATH = ""
 GEN_CSV_EVERY = 50
 GEN_CSV_LAST_STEP = -1
+EVAL_CSV_PATH = ""
 def _mean(xs: List[float]) -> float:
     return float(sum(xs) / len(xs)) if xs else 0.0
 
@@ -124,6 +125,7 @@ class ExactAccuracyEvalCallback(TrainerCallback):
         eval_max_samples: int,
         max_prompt_length: int,
         max_new_tokens: int,
+        eval_csv_path: str = "",
     ):
         self.eval_ds = eval_ds
         self.tokenizer = tokenizer
@@ -132,9 +134,10 @@ class ExactAccuracyEvalCallback(TrainerCallback):
         self.eval_max_samples = int(eval_max_samples)
         self.max_prompt_length = int(max_prompt_length)
         self.max_new_tokens = int(max_new_tokens)
+        self.eval_csv_path = eval_csv_path
         self._last_run_step = -1
 
-    def _compute_exact_metrics(self, model) -> Dict[str, float]:
+    def _compute_exact_metrics(self, model, step: int = 0) -> Dict[str, float]:
         total_rows = len(self.eval_ds)
         if total_rows == 0:
             return {
@@ -151,6 +154,7 @@ class ExactAccuracyEvalCallback(TrainerCallback):
         parse_fail = 0
         gt_match = 0
         seen = 0
+        csv_rows: List[Dict[str, Any]] = []
 
         was_training = model.training
         device = next(model.parameters()).device
@@ -188,15 +192,34 @@ class ExactAccuracyEvalCallback(TrainerCallback):
                         ai = safe_int(batch["a"][i]) if "a" in batch else None
                         bi = safe_int(batch["b"][i]) if "b" in batch else None
                         ci = safe_int(batch["c"][i]) if "c" in batch else None
+                        gt1 = safe_int(batch["r1"][i]) if "r1" in batch else None
+                        gt2 = safe_int(batch["r2"][i]) if "r2" in batch else None
+
+                        # build eval CSV row defaults
+                        csv_row: Dict[str, Any] = {
+                            "step": step,
+                            "prompt": str(prompts[i]),
+                            "model_output": txt,
+                            "final_boxed": "",
+                            "gt_r1": gt1, "gt_r2": gt2,
+                            "parsed_r1": None, "parsed_r2": None,
+                            "both_exact": False, "one_root": False,
+                            "parse_fail": False, "gt_match": False,
+                        }
+
                         if ai is None or bi is None or ci is None:
                             parse_fail += 1
                             seen += 1
+                            csv_row["parse_fail"] = True
+                            csv_rows.append(csv_row)
                             continue
 
                         parsed = parse_roots_from_answer(txt)
                         if parsed is None:
                             parse_fail += 1
                             seen += 1
+                            csv_row["parse_fail"] = True
+                            csv_rows.append(csv_row)
                             continue
 
                         pr1, pr2, _src, _raw = parsed
@@ -204,21 +227,32 @@ class ExactAccuracyEvalCallback(TrainerCallback):
                         sum_ok = (ai * (pr1 + pr2) + bi == 0)
                         prod_ok = (ai * pr1 * pr2 - ci == 0)
                         both_exact = bool(ok1 and ok2 and sum_ok and prod_ok)
+                        one_root = bool((ok1 or ok2) and not both_exact)
                         if both_exact:
                             exact += 1
                         elif ok1 or ok2:
                             one += 1
 
-                        gt1 = safe_int(batch["r1"][i]) if "r1" in batch else None
-                        gt2 = safe_int(batch["r2"][i]) if "r2" in batch else None
+                        is_gt_match = False
                         if gt1 is not None and gt2 is not None:
                             if (pr1, pr2) == (min(gt1, gt2), max(gt1, gt2)):
                                 gt_match += 1
+                                is_gt_match = True
 
+                        csv_row.update({
+                            "final_boxed": f"\\boxed{{{pr1}, {pr2}}}",
+                            "parsed_r1": pr1, "parsed_r2": pr2,
+                            "both_exact": both_exact, "one_root": one_root,
+                            "parse_fail": False, "gt_match": is_gt_match,
+                        })
+                        csv_rows.append(csv_row)
                         seen += 1
         finally:
             if was_training:
                 model.train()
+
+        if self.eval_csv_path and csv_rows and is_rank0():
+            _append_eval_csv(self.eval_csv_path, csv_rows)
 
         denom = float(max(1, seen))
         return {
@@ -247,7 +281,7 @@ class ExactAccuracyEvalCallback(TrainerCallback):
             return
 
         self._last_run_step = int(state.global_step)
-        metrics = self._compute_exact_metrics(model)
+        metrics = self._compute_exact_metrics(model, step=int(state.global_step))
         LAST_EVAL_STATS = metrics
         log.info(
             "[EVAL] step=%d exact=%.4f one=%.4f parse_fail=%.4f gt_match=%.4f n=%d",
@@ -424,6 +458,7 @@ def _to_json_scalar(x: Any) -> Any:
 
 
 def _append_generation_csv(path: str, rows: List[Dict[str, Any]]) -> None:
+    """Append training-time generation rows to train_generations.csv."""
     if not path or not rows:
         return
     out_dir = os.path.dirname(path)
@@ -433,18 +468,57 @@ def _append_generation_csv(path: str, rows: List[Dict[str, Any]]) -> None:
     with open(path, "a", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=["prompt", "model_output", "reasoning", "final_boxed", "reward"],
+            fieldnames=["step", "prompt", "model_output", "reasoning", "final_boxed", "reward"],
         )
         if write_header:
             writer.writeheader()
         for row in rows:
             writer.writerow(
                 {
+                    "step": int(row.get("step", 0)),
                     "prompt": str(row.get("prompt", "")),
                     "model_output": str(row.get("model_output", "")),
                     "reasoning": str(row.get("reasoning", "")),
                     "final_boxed": str(row.get("final_boxed", "")),
                     "reward": float(row.get("reward", 0.0)),
+                }
+            )
+
+
+def _append_eval_csv(path: str, rows: List[Dict[str, Any]]) -> None:
+    """Append eval-time rows to eval_generations.csv."""
+    if not path or not rows:
+        return
+    out_dir = os.path.dirname(path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    write_header = (not os.path.exists(path)) or (os.path.getsize(path) == 0)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "step", "prompt", "model_output", "final_boxed",
+                "gt_r1", "gt_r2", "parsed_r1", "parsed_r2",
+                "both_exact", "one_root", "parse_fail", "gt_match",
+            ],
+        )
+        if write_header:
+            writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    "step": int(row.get("step", 0)),
+                    "prompt": str(row.get("prompt", "")),
+                    "model_output": str(row.get("model_output", "")),
+                    "final_boxed": str(row.get("final_boxed", "")),
+                    "gt_r1": row.get("gt_r1", ""),
+                    "gt_r2": row.get("gt_r2", ""),
+                    "parsed_r1": row.get("parsed_r1", ""),
+                    "parsed_r2": row.get("parsed_r2", ""),
+                    "both_exact": bool(row.get("both_exact", False)),
+                    "one_root": bool(row.get("one_root", False)),
+                    "parse_fail": bool(row.get("parse_fail", False)),
+                    "gt_match": bool(row.get("gt_match", False)),
                 }
             )
 
@@ -864,6 +938,7 @@ def combined_reward_func(
                 final_boxed = f"\\boxed{{{last_r1}, {last_r2}}}"
             csv_rows.append(
                 {
+                    "step": step_now,
                     "prompt": get_text(ptxt) if ptxt is not None else "",
                     "model_output": out_txt,
                     "reasoning": reasoning_txt,
@@ -948,7 +1023,7 @@ def combined_reward_func(
 # -----------------------
 def main():
     global DEBUG_EVERY, DEBUG_SHOW_N, DEBUG_MAX_CHARS, DEBUG_PRINT_PROMPT, DEBUG_PRINT_EQUATION, DEBUG_PRINT_EFFECTIVE
-    global MIN_THINK_CHARS, LAST_EVAL_STATS, GEN_CSV_PATH, GEN_CSV_EVERY, GEN_CSV_LAST_STEP
+    global MIN_THINK_CHARS, LAST_EVAL_STATS, GEN_CSV_PATH, GEN_CSV_EVERY, GEN_CSV_LAST_STEP, EVAL_CSV_PATH
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--model_name", type=str, required=True)
@@ -998,8 +1073,9 @@ def main():
 
     # Reasoning control
     ap.add_argument("--min_think_chars", type=int, default=80)  # v12: kept at 80
-    ap.add_argument("--generation_csv_path", type=str, default="", help="CSV file for per-generation prompt/model_output/reward rows")
-    ap.add_argument("--generation_csv_every_steps", type=int, default=50, help="Write generation CSV every N global steps; 0 disables")
+    ap.add_argument("--train_csv_path", type=str, default="", help="CSV file for training-time prompt/model_output/reward rows (default: <output_dir>/train_generations.csv)")
+    ap.add_argument("--eval_csv_path", type=str, default="", help="CSV file for eval-time prompt/model_output/correctness rows (default: <output_dir>/eval_generations.csv)")
+    ap.add_argument("--generation_csv_every_steps", type=int, default=50, help="Write train generation CSV every N global steps; 0 disables")
 
     # LoRA
     ap.add_argument("--lora_r", type=int, default=48)      # v12: 32->48 for harder arithmetic
@@ -1029,11 +1105,14 @@ def main():
     DEBUG_PRINT_EQUATION = bool(args.debug_print_equation)
     DEBUG_PRINT_EFFECTIVE = bool(args.debug_print_effective)
     MIN_THINK_CHARS = int(args.min_think_chars)
-    GEN_CSV_PATH = args.generation_csv_path if args.generation_csv_path else os.path.join(args.output_dir, "generation_outputs.csv")
+    GEN_CSV_PATH = args.train_csv_path if args.train_csv_path else os.path.join(args.output_dir, "train_generations.csv")
+    EVAL_CSV_PATH = args.eval_csv_path if args.eval_csv_path else os.path.join(args.output_dir, "eval_generations.csv")
     GEN_CSV_EVERY = max(0, int(args.generation_csv_every_steps))
     GEN_CSV_LAST_STEP = -1
     if is_rank0() and GEN_CSV_EVERY > 0:
-        log.info("[CSV] generation export enabled every=%d path=%s", GEN_CSV_EVERY, GEN_CSV_PATH)
+        log.info("[CSV] train generation export enabled every=%d path=%s", GEN_CSV_EVERY, GEN_CSV_PATH)
+    if is_rank0():
+        log.info("[CSV] eval generation export path=%s", EVAL_CSV_PATH)
 
     # divisibility rule (single GPU)
     effective = args.per_device_batch_size * args.grad_accum_steps
@@ -1276,6 +1355,7 @@ def main():
                 eval_max_samples=args.eval_max_samples,
                 max_prompt_length=args.max_prompt_length,
                 max_new_tokens=eval_max_new_tokens,
+                eval_csv_path=EVAL_CSV_PATH,
             )
         )
         if is_rank0():
@@ -1297,6 +1377,37 @@ def main():
         callbacks=callbacks,
     )
 
+    # ── Baseline evaluation (step 0, before any training) ────────────────────
+    baseline_eval_metrics: Dict[str, float] = {}
+    if test_ds is not None and is_rank0():
+        eval_max_new_tokens_bl = args.eval_max_new_tokens if args.eval_max_new_tokens > 0 else args.max_completion_length
+        _bl_cb = ExactAccuracyEvalCallback(
+            eval_ds=test_ds,
+            tokenizer=tokenizer,
+            eval_every_steps=0,
+            eval_batch_size=args.eval_batch_size,
+            eval_max_samples=args.eval_max_samples,
+            max_prompt_length=args.max_prompt_length,
+            max_new_tokens=eval_max_new_tokens_bl,
+            eval_csv_path=EVAL_CSV_PATH,
+        )
+        baseline_eval_metrics = _bl_cb._compute_exact_metrics(model, step=0)
+        log.info(
+            "\n" + "=" * 80 + "\n"
+            "[BASELINE EVAL] step=0 (before training)\n"
+            "  exact_accuracy : %.4f\n"
+            "  one_root_rate  : %.4f\n"
+            "  parse_fail_rate: %.4f\n"
+            "  gt_match_rate  : %.4f\n"
+            "  samples        : %d\n"
+            "=" * 80,
+            baseline_eval_metrics.get("eval/exact_both_roots_accuracy", 0.0),
+            baseline_eval_metrics.get("eval/one_root_rate", 0.0),
+            baseline_eval_metrics.get("eval/parse_fail_rate", 0.0),
+            baseline_eval_metrics.get("eval/gt_match_rate", 0.0),
+            int(baseline_eval_metrics.get("eval/samples", 0.0)),
+        )
+
     trainer.train()
 
     if test_ds is not None:
@@ -1309,17 +1420,40 @@ def main():
             eval_max_samples=args.eval_max_samples,
             max_prompt_length=args.max_prompt_length,
             max_new_tokens=eval_max_new_tokens,
+            eval_csv_path=EVAL_CSV_PATH,
         )
-        LAST_EVAL_STATS = final_eval._compute_exact_metrics(trainer.model)
+        final_step = int(getattr(trainer.state, "global_step", args.max_steps))
+        LAST_EVAL_STATS = final_eval._compute_exact_metrics(trainer.model, step=final_step)
         trainer.log(LAST_EVAL_STATS)
         if is_rank0():
+            bl_exact = baseline_eval_metrics.get("eval/exact_both_roots_accuracy", None)
+            fn_exact = LAST_EVAL_STATS.get("eval/exact_both_roots_accuracy", 0.0)
+            delta_str = ""
+            if bl_exact is not None:
+                delta = fn_exact - bl_exact
+                delta_str = f"  delta vs baseline: {delta:+.4f} ({delta*100:+.1f}pp)\n"
             log.info(
-                "[FINAL EVAL] exact=%.4f one=%.4f parse_fail=%.4f gt_match=%.4f n=%d",
-                LAST_EVAL_STATS.get("eval/exact_both_roots_accuracy", 0.0),
+                "\n" + "=" * 80 + "\n"
+                "[FINAL EVAL] step=%d (after training)\n"
+                "  exact_accuracy : %.4f\n"
+                "  one_root_rate  : %.4f\n"
+                "  parse_fail_rate: %.4f\n"
+                "  gt_match_rate  : %.4f\n"
+                "  samples        : %d\n"
+                "%s"
+                "[BASELINE vs FINAL]\n"
+                "  baseline exact : %.4f\n"
+                "  final    exact : %.4f\n"
+                "=" * 80,
+                final_step,
+                fn_exact,
                 LAST_EVAL_STATS.get("eval/one_root_rate", 0.0),
                 LAST_EVAL_STATS.get("eval/parse_fail_rate", 0.0),
                 LAST_EVAL_STATS.get("eval/gt_match_rate", 0.0),
                 int(LAST_EVAL_STATS.get("eval/samples", 0.0)),
+                delta_str,
+                bl_exact if bl_exact is not None else float("nan"),
+                fn_exact,
             )
 
     if is_rank0() and jsonl_export_enabled and probe_ds is not None:
