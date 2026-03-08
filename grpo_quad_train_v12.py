@@ -1399,7 +1399,7 @@ def main():
             "  one_root_rate  : %.4f\n"
             "  parse_fail_rate: %.4f\n"
             "  gt_match_rate  : %.4f\n"
-            "  samples        : %d\n"
+            "  samples        : %d\n" +
             "=" * 80,
             baseline_eval_metrics.get("eval/exact_both_roots_accuracy", 0.0),
             baseline_eval_metrics.get("eval/one_root_rate", 0.0),
