@@ -1073,7 +1073,7 @@ def main():
 
     # Reasoning control
     ap.add_argument("--min_think_chars", type=int, default=80)  # v12: kept at 80
-    ap.add_argument("--train_csv_path", type=str, default="", help="CSV file for training-time prompt/model_output/reward rows (default: <output_dir>/train_generations.csv)")
+    ap.add_argument("--train_csv_path", "--generation_csv_path", dest="train_csv_path", type=str, default="", help="CSV file for training-time prompt/model_output/reward rows (default: <output_dir>/train_generations.csv)")
     ap.add_argument("--eval_csv_path", type=str, default="", help="CSV file for eval-time prompt/model_output/correctness rows (default: <output_dir>/eval_generations.csv)")
     ap.add_argument("--generation_csv_every_steps", type=int, default=50, help="Write train generation CSV every N global steps; 0 disables")
 
