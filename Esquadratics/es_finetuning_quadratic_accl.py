@@ -17,7 +17,7 @@ Task:
 
 Usage:
   python es_finetuning_quadratic_accl.py \\
-    --model_name Qwen/Qwen2.5-3B-Instruct \\
+    --model_name Qwen/Qwen2.5-0.5B-Instruct \\
     --cuda_devices 0,1,2,3 \\
     --num_engines 4 \\
     --population_size 30 \\
@@ -25,7 +25,7 @@ Usage:
 
   For single-GPU:
   python es_finetuning_quadratic_accl.py \\
-    --model_name Qwen/Qwen2.5-3B-Instruct \\
+    --model_name Qwen/Qwen2.5-0.5B-Instruct \\
     --cuda_devices 0 \\
     --num_engines 1 \\
     --population_size 20 \\
@@ -123,7 +123,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="ES Fine-tuning for Quadratic Task with multi-engine NCCL sync"
     )
-    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-3B-Instruct")
+    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-0.5B-Instruct")
     parser.add_argument("--sigma", type=float, default=SIGMA)
     parser.add_argument("--alpha", type=float, default=ALPHA)
     parser.add_argument("--population_size", type=int, default=POPULATION_SIZE)
