@@ -96,20 +96,78 @@ EVAL_CSV_PATH = ""
 def _mean(xs: List[float]) -> float:
     return float(sum(xs) / len(xs)) if xs else 0.0
 
+def _get_tb_writer(trainer):
+    """Extract the SummaryWriter from the Trainer's TensorBoardCallback."""
+    from transformers.integrations import TensorBoardCallback as _TBCb
+    for cb in trainer.callback_handler.callbacks:
+        if isinstance(cb, _TBCb) and hasattr(cb, "tb_writer") and cb.tb_writer is not None:
+            return cb.tb_writer
+    return None
+
+
 class RewardBreakdownCallback(TrainerCallback):
-    def on_log(self, args, state, control, logs=None, **kwargs):
+    def on_log(self, args, state, control, logs=None, model=None, **kwargs):
         if logs is None or not LAST_REWARD_STATS:
             return
-        logs["rewards/equation_reward_func"] = LAST_REWARD_STATS.get("equation_reward_func", 0.0)
-        logs["rewards/format_reward_func"] = LAST_REWARD_STATS.get("format_reward_func", 0.0)
-        logs["rewards/reasoning_reward_func"] = LAST_REWARD_STATS.get("reasoning_reward_func", 0.0)
-        logs["rewards/penalty_term"] = LAST_REWARD_STATS.get("penalty_term", 0.0)
-        logs["rewards/parse_fail_rate"] = LAST_REWARD_STATS.get("parse_fail_rate", 0.0)
-        logs["rewards/both_roots_rate"] = LAST_REWARD_STATS.get("both_roots_rate", 0.0)
-        logs["rewards/one_root_rate"] = LAST_REWARD_STATS.get("one_root_rate", 0.0)
-        logs["completion_length_chars"] = LAST_REWARD_STATS.get("completion_length_chars", 0.0)
+
+        eq_r = LAST_REWARD_STATS.get("equation_reward_func", 0.0)
+        fmt_r = LAST_REWARD_STATS.get("format_reward_func", 0.0)
+        reas_r = LAST_REWARD_STATS.get("reasoning_reward_func", 0.0)
+        pen_r = LAST_REWARD_STATS.get("penalty_term", 0.0)
+        pf = LAST_REWARD_STATS.get("parse_fail_rate", 0.0)
+        both_r = LAST_REWARD_STATS.get("both_roots_rate", 0.0)
+        one_r = LAST_REWARD_STATS.get("one_root_rate", 0.0)
+        comp_len = LAST_REWARD_STATS.get("completion_length_chars", 0.0)
+
+        # Individual scalars (standard Trainer logging)
+        logs["rewards/equation_reward_func"] = eq_r
+        logs["rewards/format_reward_func"] = fmt_r
+        logs["rewards/reasoning_reward_func"] = reas_r
+        logs["rewards/penalty_term"] = pen_r
+        logs["rewards/parse_fail_rate"] = pf
+        logs["rewards/both_roots_rate"] = both_r
+        logs["rewards/one_root_rate"] = one_r
+        logs["completion_length_chars"] = comp_len
+        logs["rewards/total_reward"] = eq_r + fmt_r + reas_r + pen_r
         for k, v in LAST_EVAL_STATS.items():
             logs[k] = v
+
+        # Grouped scalars (multi-line charts with legends in TensorBoard)
+        trainer = kwargs.get("trainer") or kwargs.get("processing_class")
+        # Try to find the writer via the trainer object passed in newer HF versions
+        writer = None
+        if hasattr(self, "_tb_writer"):
+            writer = self._tb_writer
+        if writer is None:
+            return
+
+        step = state.global_step
+        writer.add_scalars("Reward Components", {
+            "Math (equation)": eq_r,
+            "Format": fmt_r,
+            "Reasoning": reas_r,
+            "Penalty (deduction)": pen_r,
+        }, step)
+
+        writer.add_scalars("Reward Overview", {
+            "Total Reward": eq_r + fmt_r + reas_r + pen_r,
+            "Math Reward": eq_r,
+        }, step)
+
+        writer.add_scalars("Training Accuracy", {
+            "Both Roots Exact": both_r,
+            "One Root Only": one_r,
+            "Parse Fail": pf,
+        }, step)
+
+        # If eval stats exist, group them too
+        if LAST_EVAL_STATS:
+            writer.add_scalars("Eval Accuracy", {
+                "Both Roots Exact": LAST_EVAL_STATS.get("eval/exact_both_roots_accuracy", 0.0),
+                "One Root": LAST_EVAL_STATS.get("eval/one_root_rate", 0.0),
+                "Parse Fail": LAST_EVAL_STATS.get("eval/parse_fail_rate", 0.0),
+                "GT Match": LAST_EVAL_STATS.get("eval/gt_match_rate", 0.0),
+            }, step)
 
 class ExactAccuracyEvalCallback(TrainerCallback):
     """
@@ -1377,6 +1435,14 @@ def main():
         callbacks=callbacks,
     )
 
+    # Wire up TensorBoard writer for grouped legend charts
+    _tb_writer = _get_tb_writer(trainer)
+    if _tb_writer is not None:
+        for cb in callbacks:
+            if isinstance(cb, RewardBreakdownCallback):
+                cb._tb_writer = _tb_writer
+                break
+
     # ── Baseline evaluation (step 0, before any training) ────────────────────
     baseline_eval_metrics: Dict[str, float] = {}
     if test_ds is not None and is_rank0():
@@ -1407,6 +1473,16 @@ def main():
             baseline_eval_metrics.get("eval/gt_match_rate", 0.0),
             int(baseline_eval_metrics.get("eval/samples", 0.0)),
         )
+        # Log baseline to TensorBoard at step 0
+        if _tb_writer is not None:
+            for k, v in baseline_eval_metrics.items():
+                _tb_writer.add_scalar(k, v, 0)
+            _tb_writer.add_scalars("Eval Accuracy", {
+                "Both Roots Exact": baseline_eval_metrics.get("eval/exact_both_roots_accuracy", 0.0),
+                "One Root": baseline_eval_metrics.get("eval/one_root_rate", 0.0),
+                "Parse Fail": baseline_eval_metrics.get("eval/parse_fail_rate", 0.0),
+                "GT Match": baseline_eval_metrics.get("eval/gt_match_rate", 0.0),
+            }, 0)
 
     trainer.train()
 
@@ -1455,6 +1531,19 @@ def main():
                 bl_exact if bl_exact is not None else float("nan"),
                 fn_exact,
             )
+
+    # Save baseline_vs_final.json for plotting scripts
+    if is_rank0() and baseline_eval_metrics:
+        import json as _json
+        comparison = {
+            "baseline": {k: v for k, v in baseline_eval_metrics.items()},
+            "final": {k: v for k, v in LAST_EVAL_STATS.items()} if LAST_EVAL_STATS else {},
+            "final_step": final_step if test_ds is not None else 0,
+        }
+        comp_path = os.path.join(args.output_dir, "baseline_vs_final.json")
+        with open(comp_path, "w") as _jf:
+            _json.dump(comparison, _jf, indent=2)
+        log.info(f"Saved baseline vs final comparison to {comp_path}")
 
     if is_rank0() and jsonl_export_enabled and probe_ds is not None:
         post_rows = collect_probe_outputs(

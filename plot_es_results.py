@@ -196,6 +196,64 @@ def plot_reward_components_from_csv(csv_rows, save_dir):
     print("  ✓ es_reward_components.png")
 
 
+def plot_baseline_vs_final(data, save_dir):
+    """Bar chart comparing first iteration vs last iteration metrics."""
+    s, both = extract(data, "task/both_exact_rate")
+    _, one = extract(data, "task/one_root_rate")
+    _, pf = extract(data, "task/parse_fail_rate")
+    s_r, mean_r = extract(data, "reward/mean")
+
+    if s is None or len(s) < 2:
+        print("  [skip] need >= 2 iterations for baseline vs final")
+        return
+
+    labels = ["Both Roots\nExact", "One Root\nOnly", "Parse\nFail", "Mean\nReward"]
+    bl_vals = [
+        both[0] * 100,
+        one[0] * 100 if one is not None else 0,
+        pf[0] * 100 if pf is not None else 0,
+        mean_r[0] * 100 if mean_r is not None else 0,
+    ]
+    fn_vals = [
+        both[-1] * 100,
+        one[-1] * 100 if one is not None else 0,
+        pf[-1] * 100 if pf is not None else 0,
+        mean_r[-1] * 100 if mean_r is not None else 0,
+    ]
+
+    x = np.arange(len(labels))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+    bars1 = ax.bar(x - width / 2, bl_vals, width,
+                   label=f"Iteration {int(s[0])} (start)",
+                   color="#90CAF9", edgecolor="white")
+    bars2 = ax.bar(x + width / 2, fn_vals, width,
+                   label=f"Iteration {int(s[-1])} (final)",
+                   color="#4CAF50", edgecolor="white")
+
+    for bar in bars1:
+        h = bar.get_height()
+        ax.annotate(f"{h:.1f}%", xy=(bar.get_x() + bar.get_width() / 2, h),
+                    xytext=(0, 3), textcoords="offset points", ha="center", fontsize=10)
+    for bar in bars2:
+        h = bar.get_height()
+        ax.annotate(f"{h:.1f}%", xy=(bar.get_x() + bar.get_width() / 2, h),
+                    xytext=(0, 3), textcoords="offset points", ha="center", fontsize=10,
+                    fontweight="bold")
+
+    ax.set_ylabel("Rate / Reward (%)")
+    ax.set_title("ES Training — Baseline vs Post-Training")
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.legend()
+    ax.set_ylim(0, max(max(bl_vals), max(fn_vals)) * 1.2 + 5)
+    ax.yaxis.set_major_formatter(mticker.PercentFormatter(decimals=0))
+    fig.savefig(os.path.join(save_dir, "es_baseline_vs_final.png"))
+    plt.close(fig)
+    print("  ✓ es_baseline_vs_final.png")
+
+
 def plot_reward_histogram_from_csv(csv_rows, save_dir):
     """Histogram of per-sample rewards at first and last logged iteration."""
     if csv_rows is None:
@@ -349,6 +407,7 @@ def main():
     plot_reward_curve(data, save_dir)
     plot_accuracy_rates(data, save_dir)
     plot_timing(data, save_dir)
+    plot_baseline_vs_final(data, save_dir)
     plot_dashboard(data, save_dir)
 
     if csv_rows:

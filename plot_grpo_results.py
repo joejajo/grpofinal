@@ -434,6 +434,122 @@ def plot_dashboard(data, save_dir):
     print("  ✓ grpo_dashboard.png")
 
 
+def plot_baseline_vs_final(exp_dir, save_dir):
+    """Bar chart comparing baseline (pre-training) vs final (post-training) eval metrics."""
+    import json
+    json_path = os.path.join(exp_dir, "baseline_vs_final.json")
+    if not os.path.isfile(json_path):
+        # Try subdirectories
+        candidates = glob.glob(os.path.join(exp_dir, "**", "baseline_vs_final.json"), recursive=True)
+        if not candidates:
+            print("  [skip] baseline_vs_final.json not found")
+            return
+        json_path = candidates[0]
+
+    with open(json_path, "r") as f:
+        comp = json.load(f)
+
+    baseline = comp.get("baseline", {})
+    final = comp.get("final", {})
+    if not baseline or not final:
+        print("  [skip] baseline or final data is empty")
+        return
+
+    metrics = [
+        ("Both Roots\nExact", "eval/exact_both_roots_accuracy"),
+        ("One Root\nOnly", "eval/one_root_rate"),
+        ("Parse\nFail", "eval/parse_fail_rate"),
+        ("GT\nMatch", "eval/gt_match_rate"),
+    ]
+
+    labels = [m[0] for m in metrics]
+    bl_vals = [baseline.get(m[1], 0.0) * 100 for m in metrics]
+    fn_vals = [final.get(m[1], 0.0) * 100 for m in metrics]
+
+    x = np.arange(len(labels))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+    bars1 = ax.bar(x - width / 2, bl_vals, width, label="Baseline (before training)",
+                   color="#90CAF9", edgecolor="white")
+    bars2 = ax.bar(x + width / 2, fn_vals, width, label="Final (after training)",
+                   color="#4CAF50", edgecolor="white")
+
+    # Add value labels on bars
+    for bar in bars1:
+        h = bar.get_height()
+        ax.annotate(f"{h:.1f}%", xy=(bar.get_x() + bar.get_width() / 2, h),
+                    xytext=(0, 3), textcoords="offset points", ha="center", fontsize=10)
+    for bar in bars2:
+        h = bar.get_height()
+        ax.annotate(f"{h:.1f}%", xy=(bar.get_x() + bar.get_width() / 2, h),
+                    xytext=(0, 3), textcoords="offset points", ha="center", fontsize=10,
+                    fontweight="bold")
+
+    ax.set_ylabel("Rate (%)")
+    ax.set_title("GRPO — Baseline vs Post-Training Evaluation")
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.legend()
+    ax.set_ylim(0, max(max(bl_vals), max(fn_vals)) * 1.2)
+    ax.yaxis.set_major_formatter(mticker.PercentFormatter(decimals=0))
+    fig.savefig(os.path.join(save_dir, "grpo_baseline_vs_final.png"))
+    plt.close(fig)
+    print("  ✓ grpo_baseline_vs_final.png")
+
+
+def plot_baseline_vs_final_from_tb(data, save_dir):
+    """Baseline vs final from TensorBoard eval tags (first and last data point)."""
+    s, acc = extract(data, "eval/exact_both_roots_accuracy")
+    if s is None or len(s) < 2:
+        print("  [skip] need >= 2 eval data points for baseline vs final (TB)")
+        return
+
+    _, e_one = extract(data, "eval/one_root_rate")
+    _, e_pf = extract(data, "eval/parse_fail_rate")
+    _, e_gt = extract(data, "eval/gt_match_rate")
+
+    metrics_labels = ["Both Roots\nExact", "One Root\nOnly", "Parse\nFail", "GT\nMatch"]
+    bl_vals = [acc[0] * 100,
+               (e_one[0] * 100 if e_one is not None else 0),
+               (e_pf[0] * 100 if e_pf is not None else 0),
+               (e_gt[0] * 100 if e_gt is not None else 0)]
+    fn_vals = [acc[-1] * 100,
+               (e_one[-1] * 100 if e_one is not None else 0),
+               (e_pf[-1] * 100 if e_pf is not None else 0),
+               (e_gt[-1] * 100 if e_gt is not None else 0)]
+
+    x = np.arange(len(metrics_labels))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+    bars1 = ax.bar(x - width / 2, bl_vals, width, label=f"Step {int(s[0])} (baseline)",
+                   color="#90CAF9", edgecolor="white")
+    bars2 = ax.bar(x + width / 2, fn_vals, width, label=f"Step {int(s[-1])} (final)",
+                   color="#4CAF50", edgecolor="white")
+
+    for bar in bars1:
+        h = bar.get_height()
+        ax.annotate(f"{h:.1f}%", xy=(bar.get_x() + bar.get_width() / 2, h),
+                    xytext=(0, 3), textcoords="offset points", ha="center", fontsize=10)
+    for bar in bars2:
+        h = bar.get_height()
+        ax.annotate(f"{h:.1f}%", xy=(bar.get_x() + bar.get_width() / 2, h),
+                    xytext=(0, 3), textcoords="offset points", ha="center", fontsize=10,
+                    fontweight="bold")
+
+    ax.set_ylabel("Rate (%)")
+    ax.set_title("GRPO — Baseline vs Post-Training Evaluation")
+    ax.set_xticks(x)
+    ax.set_xticklabels(metrics_labels)
+    ax.legend()
+    ax.set_ylim(0, max(max(bl_vals), max(fn_vals)) * 1.2 + 5)
+    ax.yaxis.set_major_formatter(mticker.PercentFormatter(decimals=0))
+    fig.savefig(os.path.join(save_dir, "grpo_baseline_vs_final.png"))
+    plt.close(fig)
+    print("  ✓ grpo_baseline_vs_final.png")
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="Plot GRPO finetuning results")
@@ -477,6 +593,14 @@ def main():
     plot_loss(data, save_dir)
     plot_completion_length(data, save_dir)
     plot_dashboard(data, save_dir)
+
+    # Baseline vs post-training bar chart (try JSON first, then TensorBoard)
+    json_path = os.path.join(args.exp_dir, "baseline_vs_final.json")
+    json_candidates = glob.glob(os.path.join(args.exp_dir, "**", "baseline_vs_final.json"), recursive=True)
+    if os.path.isfile(json_path) or json_candidates:
+        plot_baseline_vs_final(args.exp_dir, save_dir)
+    else:
+        plot_baseline_vs_final_from_tb(data, save_dir)
 
     if train_csv:
         plot_reward_histogram_from_csv(train_csv, save_dir)

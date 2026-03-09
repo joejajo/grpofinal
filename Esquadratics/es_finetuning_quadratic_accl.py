@@ -311,6 +311,13 @@ def _postprocess_outputs(outputs, task_datas):
             parse_fail_count += 1
 
     n = len(task_datas) or 1
+
+    # Aggregate reward components across samples
+    math_rewards = [r.get("reward_info", {}).get("math_reward", 0.0) for r in rewards]
+    format_rewards = [r.get("reward_info", {}).get("format_reward", 0.0) for r in rewards]
+    reasoning_rewards = [r.get("reward_info", {}).get("reasoning_reward", 0.0) for r in rewards]
+    deductions = [r.get("reward_info", {}).get("deduction", 0.0) for r in rewards]
+
     return {
         "rewards": rewards,
         "responses": responses,
@@ -318,6 +325,10 @@ def _postprocess_outputs(outputs, task_datas):
         "both_exact_rate": both_exact_count / n,
         "one_root_rate": one_root_count / n,
         "parse_fail_rate": parse_fail_count / n,
+        "avg_math_reward": float(np.mean(math_rewards)),
+        "avg_format_reward": float(np.mean(format_rewards)),
+        "avg_reasoning_reward": float(np.mean(reasoning_rewards)),
+        "avg_deduction": float(np.mean(deductions)),
     }
 
 
@@ -515,7 +526,8 @@ def main(args):
             if args.verbose:
                 print(f"Seed {k} normalized reward: {seeds_perf[k]['norm_reward']:.4f}")
 
-        # TensorBoard logging
+        # ── TensorBoard logging ──────────────────────────────────────
+        # Individual scalars (for clean single-line plots)
         writer.add_scalar("reward/mean", mean_reward, i)
         writer.add_scalar("reward/std", std_reward, i)
         writer.add_scalar("reward/min", min_reward, i)
@@ -527,6 +539,38 @@ def main(args):
         if mean_reward > best_reward:
             best_reward = mean_reward
             writer.add_scalar("reward/best", best_reward, i)
+
+        # Grouped scalars (multi-line charts with legends in TensorBoard)
+        writer.add_scalars("Reward Overview", {
+            "Mean Reward": mean_reward,
+            "Best Reward": best_reward,
+            "Min Reward": min_reward,
+            "Max Reward": max_reward,
+        }, i)
+
+        writer.add_scalars("Accuracy Rates", {
+            "Both Roots Exact": avg_both_exact,
+            "One Root Only": avg_one_root,
+            "Parse Fail": avg_parse_fail,
+        }, i)
+
+        # Reward component breakdown (averaged across seeds)
+        avg_math = float(np.mean([v["avg_math_reward"] for v in seeds_perf.values()]))
+        avg_fmt = float(np.mean([v["avg_format_reward"] for v in seeds_perf.values()]))
+        avg_reas = float(np.mean([v["avg_reasoning_reward"] for v in seeds_perf.values()]))
+        avg_ded = float(np.mean([v["avg_deduction"] for v in seeds_perf.values()]))
+
+        writer.add_scalar("components/math_reward", avg_math, i)
+        writer.add_scalar("components/format_reward", avg_fmt, i)
+        writer.add_scalar("components/reasoning_reward", avg_reas, i)
+        writer.add_scalar("components/deduction", avg_ded, i)
+
+        writer.add_scalars("Reward Components", {
+            "Math": avg_math,
+            "Format": avg_fmt,
+            "Reasoning": avg_reas,
+            "Deduction (penalty)": avg_ded,
+        }, i)
 
         # CSV logging: write per-sample outputs from the best seed this iteration
         if csv_every > 0 and (i % csv_every == 0 or i == args.num_iterations - 1):
@@ -594,8 +638,17 @@ def main(args):
                       f"time: {res['time']:.2f}s")
 
         total_iter_end = time.time()
-        writer.add_scalar("time/iteration", total_iter_end - total_iter_start, i)
-        print(f"Wall clock time for iteration {i}: {total_iter_end - total_iter_start:.2f}s")
+        t_perturb = time.time() - perturb_start
+        t_broadcast = time.time() - broadcast_start
+        t_total = total_iter_end - total_iter_start
+        writer.add_scalar("time/iteration", t_total, i)
+
+        writer.add_scalars("Timing Breakdown (s)", {
+            "Total Iteration": t_total,
+            "Perturbation": t_perturb,
+            "Broadcast": t_broadcast,
+        }, i)
+        print(f"Wall clock time for iteration {i}: {t_total:.2f}s")
 
         # Periodic checkpointing
         if (i + 1) % 100 == 0 or i == args.num_iterations - 1:
