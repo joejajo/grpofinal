@@ -7,10 +7,9 @@
 #SBATCH --export=NONE
 
 # =============================================================================
-#  ES (Evolutionary Strategies) Quadratic Roots — v01 SLURM script
+#  ES Quadratic Roots — 1-GPU SLURM script
 #
-#  Uses es_finetuning_quadratic_accl.py instead of GRPO.
-#  Single-GPU setup with 1 vLLM engine.
+#  Single vLLM engine on 1 RTX 3080.
 # =============================================================================
 
 unset SLURM_EXPORT_ENV
