@@ -33,6 +33,7 @@ Usage:
 """
 
 import argparse
+import csv
 from datetime import datetime
 import gc
 import json
@@ -55,6 +56,32 @@ from vllm import LLM, SamplingParams
 from vllm.utils import get_ip, get_open_port
 
 from quadratic_task import reward_function
+
+# ── CSV logging ──────────────────────────────────────────────────────────────
+
+CSV_FIELDNAMES = [
+    "iteration", "seed", "sample_idx", "system_prompt", "equation",
+    "a", "b", "c", "gt_r1", "gt_r2", "user_prompt", "model_output",
+    "reward", "math_reward", "format_reward", "reasoning_reward",
+    "deduction", "both_exact", "one_root", "parse_fail",
+]
+
+
+def _append_training_csv(path: str, rows: list) -> None:
+    """Append training-time generation rows to CSV with system prompt included."""
+    if not path or not rows:
+        return
+    out_dir = os.path.dirname(path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    write_header = (not os.path.exists(path)) or (os.path.getsize(path) == 0)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDNAMES)
+        if write_header:
+            writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
 
 # ── Default Hyperparameters ──────────────────────────────────────────────────
 
@@ -115,6 +142,10 @@ def parse_args():
                         choices=["float16", "bfloat16"],
                         help="Model dtype for vLLM engines")
     parser.add_argument("--global_seed", type=int, help="Global random seed")
+    parser.add_argument("--csv_every_iters", type=int, default=50,
+                        help="Write training CSV every N iterations; 0 disables")
+    parser.add_argument("--csv_sample_n", type=int, default=0,
+                        help="Max samples to log per CSV write; 0 logs all")
     args = parser.parse_args()
 
     # Scope host GPU visibility; vLLM actors use placement groups for device assignment
@@ -252,12 +283,14 @@ def _postprocess_outputs(outputs, task_datas):
     """Compute rewards for all generated outputs."""
     rewards = []
     avg_rewards = []
+    responses = []
     both_exact_count = 0
     one_root_count = 0
     parse_fail_count = 0
 
     for output, data in zip(outputs, task_datas):
         response = output.outputs[0].text
+        responses.append(response)
         r = reward_function(
             response,
             a=data["a"],
@@ -280,6 +313,7 @@ def _postprocess_outputs(outputs, task_datas):
     n = len(task_datas) or 1
     return {
         "rewards": rewards,
+        "responses": responses,
         "avg_reward": float(np.mean(avg_rewards)) if avg_rewards else 0.0,
         "both_exact_rate": both_exact_count / n,
         "one_root_rate": one_root_count / n,
@@ -377,6 +411,14 @@ def main(args):
     }
     with open(f"{logging_dir}/config.json", "w") as f:
         json.dump(config, f, indent=2)
+
+    # CSV setup
+    train_csv_path = os.path.join(logging_dir, "train_generations.csv")
+    csv_every = max(0, args.csv_every_iters)
+    csv_sample_n = args.csv_sample_n
+    if csv_every > 0:
+        print(f"CSV logging enabled: every {csv_every} iters -> {train_csv_path}")
+
     print(f"\nConfig saved to {logging_dir}/config.json")
     print(f"TensorBoard logs: {logging_dir}")
     print(f"\n{'='*80}")
@@ -485,6 +527,41 @@ def main(args):
         if mean_reward > best_reward:
             best_reward = mean_reward
             writer.add_scalar("reward/best", best_reward, i)
+
+        # CSV logging: write per-sample outputs from the best seed this iteration
+        if csv_every > 0 and (i % csv_every == 0 or i == args.num_iterations - 1):
+            best_seed = max(seeds_perf.keys(), key=lambda s: seeds_perf[s]["avg_reward"])
+            best_metrics = seeds_perf[best_seed]
+            csv_rows = []
+            n_log = len(task_datas)
+            if csv_sample_n > 0:
+                n_log = min(csv_sample_n, n_log)
+            for si in range(n_log):
+                info = best_metrics["rewards"][si].get("reward_info", {})
+                csv_rows.append({
+                    "iteration": i,
+                    "seed": best_seed,
+                    "sample_idx": si,
+                    "system_prompt": SYSTEM_PROMPT,
+                    "equation": task_datas[si]["equation"],
+                    "a": task_datas[si]["a"],
+                    "b": task_datas[si]["b"],
+                    "c": task_datas[si]["c"],
+                    "gt_r1": task_datas[si]["r1"],
+                    "gt_r2": task_datas[si]["r2"],
+                    "user_prompt": task_datas[si]["context"],
+                    "model_output": best_metrics["responses"][si],
+                    "reward": best_metrics["rewards"][si]["reward"],
+                    "math_reward": info.get("math_reward", 0.0),
+                    "format_reward": info.get("format_reward", 0.0),
+                    "reasoning_reward": info.get("reasoning_reward", 0.0),
+                    "deduction": info.get("deduction", 0.0),
+                    "both_exact": info.get("both_exact", False),
+                    "one_root": info.get("one_root", False),
+                    "parse_fail": info.get("parse_fail", False),
+                })
+            _append_training_csv(train_csv_path, csv_rows)
+            print(f"[CSV] wrote {len(csv_rows)} rows at iter={i} (best seed={best_seed}) -> {train_csv_path}")
 
         # Compute ES update ONLY on engine 0
         per_seed_coeffs = [
