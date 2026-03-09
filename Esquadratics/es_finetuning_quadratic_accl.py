@@ -17,7 +17,7 @@ Task:
 
 Usage:
   python es_finetuning_quadratic_accl.py \\
-    --model_name Qwen/Qwen2.5-3B-Instruct \\
+    --model_name Qwen/Qwen2.5-0.5B-Instruct \\
     --cuda_devices 0,1,2,3 \\
     --num_engines 4 \\
     --population_size 30 \\
@@ -25,7 +25,7 @@ Usage:
 
   For single-GPU:
   python es_finetuning_quadratic_accl.py \\
-    --model_name Qwen/Qwen2.5-3B-Instruct \\
+    --model_name Qwen/Qwen2.5-0.5B-Instruct \\
     --cuda_devices 0 \\
     --num_engines 1 \\
     --population_size 20 \\
@@ -33,6 +33,7 @@ Usage:
 """
 
 import argparse
+import csv
 from datetime import datetime
 import gc
 import json
@@ -55,6 +56,32 @@ from vllm import LLM, SamplingParams
 from vllm.utils import get_ip, get_open_port
 
 from quadratic_task import reward_function
+
+# ── CSV logging ──────────────────────────────────────────────────────────────
+
+CSV_FIELDNAMES = [
+    "iteration", "seed", "sample_idx", "system_prompt", "equation",
+    "a", "b", "c", "gt_r1", "gt_r2", "user_prompt", "model_output",
+    "reward", "math_reward", "format_reward", "reasoning_reward",
+    "deduction", "both_exact", "one_root", "parse_fail",
+]
+
+
+def _append_training_csv(path: str, rows: list) -> None:
+    """Append training-time generation rows to CSV with system prompt included."""
+    if not path or not rows:
+        return
+    out_dir = os.path.dirname(path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    write_header = (not os.path.exists(path)) or (os.path.getsize(path) == 0)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDNAMES)
+        if write_header:
+            writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
 
 # ── Default Hyperparameters ──────────────────────────────────────────────────
 
@@ -96,7 +123,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="ES Fine-tuning for Quadratic Task with multi-engine NCCL sync"
     )
-    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-3B-Instruct")
+    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-0.5B-Instruct")
     parser.add_argument("--sigma", type=float, default=SIGMA)
     parser.add_argument("--alpha", type=float, default=ALPHA)
     parser.add_argument("--population_size", type=int, default=POPULATION_SIZE)
@@ -115,6 +142,10 @@ def parse_args():
                         choices=["float16", "bfloat16"],
                         help="Model dtype for vLLM engines")
     parser.add_argument("--global_seed", type=int, help="Global random seed")
+    parser.add_argument("--csv_every_iters", type=int, default=50,
+                        help="Write training CSV every N iterations; 0 disables")
+    parser.add_argument("--csv_sample_n", type=int, default=0,
+                        help="Max samples to log per CSV write; 0 logs all")
     args = parser.parse_args()
 
     # Scope host GPU visibility; vLLM actors use placement groups for device assignment
@@ -252,12 +283,14 @@ def _postprocess_outputs(outputs, task_datas):
     """Compute rewards for all generated outputs."""
     rewards = []
     avg_rewards = []
+    responses = []
     both_exact_count = 0
     one_root_count = 0
     parse_fail_count = 0
 
     for output, data in zip(outputs, task_datas):
         response = output.outputs[0].text
+        responses.append(response)
         r = reward_function(
             response,
             a=data["a"],
@@ -278,12 +311,24 @@ def _postprocess_outputs(outputs, task_datas):
             parse_fail_count += 1
 
     n = len(task_datas) or 1
+
+    # Aggregate reward components across samples
+    math_rewards = [r.get("reward_info", {}).get("math_reward", 0.0) for r in rewards]
+    format_rewards = [r.get("reward_info", {}).get("format_reward", 0.0) for r in rewards]
+    reasoning_rewards = [r.get("reward_info", {}).get("reasoning_reward", 0.0) for r in rewards]
+    deductions = [r.get("reward_info", {}).get("deduction", 0.0) for r in rewards]
+
     return {
         "rewards": rewards,
+        "responses": responses,
         "avg_reward": float(np.mean(avg_rewards)) if avg_rewards else 0.0,
         "both_exact_rate": both_exact_count / n,
         "one_root_rate": one_root_count / n,
         "parse_fail_rate": parse_fail_count / n,
+        "avg_math_reward": float(np.mean(math_rewards)),
+        "avg_format_reward": float(np.mean(format_rewards)),
+        "avg_reasoning_reward": float(np.mean(reasoning_rewards)),
+        "avg_deduction": float(np.mean(deductions)),
     }
 
 
@@ -377,6 +422,14 @@ def main(args):
     }
     with open(f"{logging_dir}/config.json", "w") as f:
         json.dump(config, f, indent=2)
+
+    # CSV setup
+    train_csv_path = os.path.join(logging_dir, "train_generations.csv")
+    csv_every = max(0, args.csv_every_iters)
+    csv_sample_n = args.csv_sample_n
+    if csv_every > 0:
+        print(f"CSV logging enabled: every {csv_every} iters -> {train_csv_path}")
+
     print(f"\nConfig saved to {logging_dir}/config.json")
     print(f"TensorBoard logs: {logging_dir}")
     print(f"\n{'='*80}")
@@ -473,7 +526,8 @@ def main(args):
             if args.verbose:
                 print(f"Seed {k} normalized reward: {seeds_perf[k]['norm_reward']:.4f}")
 
-        # TensorBoard logging
+        # ── TensorBoard logging ──────────────────────────────────────
+        # Individual scalars (for clean single-line plots)
         writer.add_scalar("reward/mean", mean_reward, i)
         writer.add_scalar("reward/std", std_reward, i)
         writer.add_scalar("reward/min", min_reward, i)
@@ -485,6 +539,73 @@ def main(args):
         if mean_reward > best_reward:
             best_reward = mean_reward
             writer.add_scalar("reward/best", best_reward, i)
+
+        # Grouped scalars (multi-line charts with legends in TensorBoard)
+        writer.add_scalars("Reward Overview", {
+            "Mean Reward": mean_reward,
+            "Best Reward": best_reward,
+            "Min Reward": min_reward,
+            "Max Reward": max_reward,
+        }, i)
+
+        writer.add_scalars("Accuracy Rates", {
+            "Both Roots Exact": avg_both_exact,
+            "One Root Only": avg_one_root,
+            "Parse Fail": avg_parse_fail,
+        }, i)
+
+        # Reward component breakdown (averaged across seeds)
+        avg_math = float(np.mean([v["avg_math_reward"] for v in seeds_perf.values()]))
+        avg_fmt = float(np.mean([v["avg_format_reward"] for v in seeds_perf.values()]))
+        avg_reas = float(np.mean([v["avg_reasoning_reward"] for v in seeds_perf.values()]))
+        avg_ded = float(np.mean([v["avg_deduction"] for v in seeds_perf.values()]))
+
+        writer.add_scalar("components/math_reward", avg_math, i)
+        writer.add_scalar("components/format_reward", avg_fmt, i)
+        writer.add_scalar("components/reasoning_reward", avg_reas, i)
+        writer.add_scalar("components/deduction", avg_ded, i)
+
+        writer.add_scalars("Reward Components", {
+            "Math": avg_math,
+            "Format": avg_fmt,
+            "Reasoning": avg_reas,
+            "Deduction (penalty)": avg_ded,
+        }, i)
+
+        # CSV logging: write per-sample outputs from the best seed this iteration
+        if csv_every > 0 and (i % csv_every == 0 or i == args.num_iterations - 1):
+            best_seed = max(seeds_perf.keys(), key=lambda s: seeds_perf[s]["avg_reward"])
+            best_metrics = seeds_perf[best_seed]
+            csv_rows = []
+            n_log = len(task_datas)
+            if csv_sample_n > 0:
+                n_log = min(csv_sample_n, n_log)
+            for si in range(n_log):
+                info = best_metrics["rewards"][si].get("reward_info", {})
+                csv_rows.append({
+                    "iteration": i,
+                    "seed": best_seed,
+                    "sample_idx": si,
+                    "system_prompt": SYSTEM_PROMPT,
+                    "equation": task_datas[si]["equation"],
+                    "a": task_datas[si]["a"],
+                    "b": task_datas[si]["b"],
+                    "c": task_datas[si]["c"],
+                    "gt_r1": task_datas[si]["r1"],
+                    "gt_r2": task_datas[si]["r2"],
+                    "user_prompt": task_datas[si]["context"],
+                    "model_output": best_metrics["responses"][si],
+                    "reward": best_metrics["rewards"][si]["reward"],
+                    "math_reward": info.get("math_reward", 0.0),
+                    "format_reward": info.get("format_reward", 0.0),
+                    "reasoning_reward": info.get("reasoning_reward", 0.0),
+                    "deduction": info.get("deduction", 0.0),
+                    "both_exact": info.get("both_exact", False),
+                    "one_root": info.get("one_root", False),
+                    "parse_fail": info.get("parse_fail", False),
+                })
+            _append_training_csv(train_csv_path, csv_rows)
+            print(f"[CSV] wrote {len(csv_rows)} rows at iter={i} (best seed={best_seed}) -> {train_csv_path}")
 
         # Compute ES update ONLY on engine 0
         per_seed_coeffs = [
@@ -517,8 +638,17 @@ def main(args):
                       f"time: {res['time']:.2f}s")
 
         total_iter_end = time.time()
-        writer.add_scalar("time/iteration", total_iter_end - total_iter_start, i)
-        print(f"Wall clock time for iteration {i}: {total_iter_end - total_iter_start:.2f}s")
+        t_perturb = time.time() - perturb_start
+        t_broadcast = time.time() - broadcast_start
+        t_total = total_iter_end - total_iter_start
+        writer.add_scalar("time/iteration", t_total, i)
+
+        writer.add_scalars("Timing Breakdown (s)", {
+            "Total Iteration": t_total,
+            "Perturbation": t_perturb,
+            "Broadcast": t_broadcast,
+        }, i)
+        print(f"Wall clock time for iteration {i}: {t_total:.2f}s")
 
         # Periodic checkpointing
         if (i + 1) % 100 == 0 or i == args.num_iterations - 1:
