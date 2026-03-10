@@ -21,7 +21,7 @@ Usage:
     --cuda_devices 0,1,2,3 \\
     --num_engines 4 \\
     --population_size 30 \\
-    --num_iterations 1000
+    --num_iterations 500
 
   For single-GPU:
   python es_finetuning_quadratic_accl.py \\
@@ -29,7 +29,7 @@ Usage:
     --cuda_devices 0 \\
     --num_engines 1 \\
     --population_size 20 \\
-    --num_iterations 500
+    --num_iterations 250
 """
 
 import argparse
@@ -89,7 +89,7 @@ SIGMA = 0.001           # noise standard deviation for perturbation
 ALPHA = 0.0005          # learning rate for ES update
 POPULATION_SIZE = 30    # number of perturbation seeds per iteration
 NUM_ENGINES = 4         # number of vLLM engines (one per GPU)
-NUM_ITERATIONS = 1000   # total ES iterations
+NUM_ITERATIONS = 500   # total ES iterations
 EXPERIMENT_DIR = "es-ft-quadratic-experiment"
 DATA_SAMPLE = 200       # number of dataset samples to evaluate per seed
 
