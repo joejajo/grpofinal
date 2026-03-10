@@ -45,7 +45,7 @@ python "${SCRIPT}" \
   --cuda_devices            0,1,2,3 \
   --num_engines             4 \
   --population_size         30 \
-  --num_iterations          1000 \
+  --num_iterations          500 \
   --sigma                   0.001 \
   --alpha                   0.0005 \
   --data_sample             200 \

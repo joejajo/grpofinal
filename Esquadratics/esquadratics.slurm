@@ -30,7 +30,7 @@ DATA_PARQUET="${BASE_DIR}/Dataset/quad_medhard_train.parquet"
 EVAL_PARQUET="${BASE_DIR}/Dataset/quad_medhard_eval.parquet"
 MODEL_DIR="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
 OUT_DIR="${BASE_DIR}/outputs/result_${SLURM_JOB_ID}"
-NUM_ITERS=1000
+NUM_ITERS=500
 mkdir -p "${OUT_DIR}"
 
 export PYTHONUNBUFFERED=1
