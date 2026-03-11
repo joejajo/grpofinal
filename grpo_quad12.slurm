@@ -97,7 +97,7 @@ accelerate launch \
   --max_completion_length   1024 \
   \
   --eval_every_steps        200 \
-  --eval_max_samples        300 \
+  --eval_max_samples        0 \
   --eval_batch_size         8 \
   --eval_max_new_tokens     512 \
   \

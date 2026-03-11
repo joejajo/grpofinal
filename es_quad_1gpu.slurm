@@ -47,7 +47,7 @@ python "${SCRIPT}" \
   --num_iterations          500 \
   --sigma                   0.001 \
   --alpha                   0.0005 \
-  --data_sample             200 \
+  --data_sample             0 \
   --data_path               "${DATA_PARQUET}" \
   --experiment_dir          "${OUT_DIR}/es_experiment" \
   --max_tokens              1024 \
