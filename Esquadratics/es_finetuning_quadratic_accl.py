@@ -53,7 +53,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from vllm import LLM, SamplingParams
-from vllm.utils import get_ip, get_open_port
+from vllm.distributed.utils import get_ip, get_open_port
 
 from quadratic_task import reward_function
 
