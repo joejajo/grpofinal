@@ -41,6 +41,7 @@ import os
 import random
 import shutil
 import signal
+import socket
 import sys
 import time
 
@@ -53,7 +54,16 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from vllm import LLM, SamplingParams
-from vllm.distributed.utils import get_ip, get_open_port
+
+
+def get_ip():
+    return socket.gethostbyname(socket.gethostname())
+
+
+def get_open_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
 
 from quadratic_task import reward_function
 
