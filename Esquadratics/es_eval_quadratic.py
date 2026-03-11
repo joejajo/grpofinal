@@ -34,7 +34,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from vllm import LLM, SamplingParams
 
-from quadratic_task import reward_function
+from quad.quadratic_task import reward_function
 
 # ── System prompt (must match training) ───────────────────────────────────
 

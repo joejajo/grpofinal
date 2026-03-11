@@ -65,7 +65,7 @@ def get_open_port():
         s.bind(("", 0))
         return s.getsockname()[1]
 
-from quadratic_task import reward_function
+from quad.quadratic_task import reward_function
 
 # ── CSV logging ──────────────────────────────────────────────────────────────
 
