@@ -22,7 +22,7 @@ module load python/3.12-conda
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
 set +u
-conda activate grpo
+conda activate myenv
 set -u
 
 BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"
@@ -48,7 +48,7 @@ python "${SCRIPT}" \
   --num_iterations          500 \
   --sigma                   0.001 \
   --alpha                   0.0005 \
-  --data_sample             200 \
+  --data_sample             0 \
   --data_path               "${DATA_PARQUET}" \
   --experiment_dir          "${OUT_DIR}/es_experiment" \
   --max_tokens              1024 \
