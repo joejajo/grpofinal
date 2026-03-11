@@ -55,6 +55,8 @@ python "${SCRIPT}" \
   --alpha                   0.0005 \
   --data_sample             0 \
   --data_path               "${DATA_PARQUET}" \
+  --eval_data               "${EVAL_PARQUET}" \
+  --eval_every_iters        50 \
   --experiment_dir          "${OUT_DIR}/es_experiment" \
   --max_tokens              1024 \
   --dtype                   float16 \

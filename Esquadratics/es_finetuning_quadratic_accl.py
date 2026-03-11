@@ -77,6 +77,14 @@ CSV_FIELDNAMES = [
 ]
 
 
+EVAL_CSV_FIELDNAMES = [
+    "iteration", "sample_idx", "equation",
+    "a", "b", "c", "gt_r1", "gt_r2", "user_prompt", "model_output",
+    "reward", "math_reward", "format_reward", "reasoning_reward",
+    "deduction", "both_exact", "one_root", "parse_fail",
+]
+
+
 def _append_training_csv(path: str, rows: list) -> None:
     """Append training-time generation rows to CSV with system prompt included."""
     if not path or not rows:
@@ -91,6 +99,99 @@ def _append_training_csv(path: str, rows: list) -> None:
             writer.writeheader()
         for row in rows:
             writer.writerow(row)
+
+
+def _append_eval_csv(path: str, rows: list) -> None:
+    """Append eval-time generation rows to CSV."""
+    if not path or not rows:
+        return
+    out_dir = os.path.dirname(path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    write_header = (not os.path.exists(path)) or (os.path.getsize(path) == 0)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=EVAL_CSV_FIELDNAMES)
+        if write_header:
+            writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def _run_periodic_eval(engine, eval_task_datas, iteration, max_tokens, eval_csv_path, writer):
+    """Run evaluation on held-out eval set using engine 0 (unperturbed weights)."""
+    prompts = [d["context"] for d in eval_task_datas]
+    sampling_params = SamplingParams(
+        temperature=0.0,
+        seed=42,
+        max_tokens=max_tokens,
+    )
+    t0 = time.time()
+    outputs = ray.get(engine.generate.remote(prompts, sampling_params, use_tqdm=False))
+    elapsed = time.time() - t0
+
+    csv_rows = []
+    all_rewards = []
+    both_exact_count = 0
+    one_root_count = 0
+    parse_fail_count = 0
+
+    for idx, (output, data) in enumerate(zip(outputs, eval_task_datas)):
+        response = output.outputs[0].text
+        r = reward_function(
+            response,
+            a=data["a"], b=data["b"], c=data["c"],
+            r1_gt=data["r1"], r2_gt=data["r2"],
+        )
+        info = r.get("reward_info", {})
+        all_rewards.append(r["reward"])
+        if info.get("both_exact"):
+            both_exact_count += 1
+        elif info.get("one_root"):
+            one_root_count += 1
+        if info.get("parse_fail"):
+            parse_fail_count += 1
+
+        csv_rows.append({
+            "iteration": iteration,
+            "sample_idx": idx,
+            "equation": data["equation"],
+            "a": data["a"],
+            "b": data["b"],
+            "c": data["c"],
+            "gt_r1": data["r1"],
+            "gt_r2": data["r2"],
+            "user_prompt": data["context"],
+            "model_output": response,
+            "reward": r["reward"],
+            "math_reward": info.get("math_reward", 0.0),
+            "format_reward": info.get("format_reward", 0.0),
+            "reasoning_reward": info.get("reasoning_reward", 0.0),
+            "deduction": info.get("deduction", 0.0),
+            "both_exact": info.get("both_exact", False),
+            "one_root": info.get("one_root", False),
+            "parse_fail": info.get("parse_fail", False),
+        })
+
+    n = len(eval_task_datas)
+    mean_reward = float(np.mean(all_rewards))
+    both_rate = both_exact_count / n
+    one_rate = one_root_count / n
+    fail_rate = parse_fail_count / n
+
+    # TensorBoard
+    writer.add_scalar("eval/mean_reward", mean_reward, iteration)
+    writer.add_scalar("eval/both_exact_rate", both_rate, iteration)
+    writer.add_scalar("eval/one_root_rate", one_rate, iteration)
+    writer.add_scalar("eval/parse_fail_rate", fail_rate, iteration)
+
+    # CSV
+    _append_eval_csv(eval_csv_path, csv_rows)
+
+    print(f"[EVAL] iter={iteration} | reward={mean_reward:.4f} | "
+          f"both_exact={both_rate*100:.1f}% | parse_fail={fail_rate*100:.1f}% | "
+          f"{elapsed:.1f}s | {len(csv_rows)} rows -> {eval_csv_path}")
+
+    return mean_reward
 
 
 # ── Default Hyperparameters ──────────────────────────────────────────────────
@@ -156,6 +257,10 @@ def parse_args():
                         help="Write training CSV every N iterations; 0 disables")
     parser.add_argument("--csv_sample_n", type=int, default=0,
                         help="Max samples to log per CSV write; 0 logs all")
+    parser.add_argument("--eval_data", type=str, default="",
+                        help="Path to eval parquet for periodic evaluation during training")
+    parser.add_argument("--eval_every_iters", type=int, default=50,
+                        help="Run evaluation every N iterations; 0 disables")
     args = parser.parse_args()
 
     # Scope host GPU visibility; vLLM actors use placement groups for device assignment
@@ -428,6 +533,8 @@ def main(args):
         "max_tokens": args.max_tokens,
         "dtype": args.dtype,
         "global_seed": args.global_seed,
+        "eval_data": args.eval_data,
+        "eval_every_iters": args.eval_every_iters,
         "task": "quadratic_integer_roots",
     }
     with open(f"{logging_dir}/config.json", "w") as f:
@@ -439,6 +546,17 @@ def main(args):
     csv_sample_n = args.csv_sample_n
     if csv_every > 0:
         print(f"CSV logging enabled: every {csv_every} iters -> {train_csv_path}")
+
+    # Eval setup
+    eval_task_datas = None
+    eval_csv_path = os.path.join(logging_dir, "eval_generations.csv")
+    eval_every = max(0, args.eval_every_iters)
+    if args.eval_data and os.path.exists(args.eval_data):
+        eval_task_datas = load_quadratic_data(args.eval_data, tokenizer, data_sample=0)
+        print(f"Eval data loaded: {len(eval_task_datas)} samples from {args.eval_data}")
+        print(f"Eval CSV: every {eval_every} iters -> {eval_csv_path}")
+    elif args.eval_data:
+        print(f"WARNING: eval_data path not found: {args.eval_data}")
 
     print(f"\nConfig saved to {logging_dir}/config.json")
     print(f"TensorBoard logs: {logging_dir}")
@@ -616,6 +734,10 @@ def main(args):
                 })
             _append_training_csv(train_csv_path, csv_rows)
             print(f"[CSV] wrote {len(csv_rows)} rows at iter={i} (best seed={best_seed}) -> {train_csv_path}")
+
+        # Periodic evaluation on held-out eval set
+        if eval_task_datas and eval_every > 0 and (i % eval_every == 0 or i == args.num_iterations - 1):
+            _run_periodic_eval(engines[0], eval_task_datas, i, args.max_tokens, eval_csv_path, writer)
 
         # Compute ES update ONLY on engine 0
         per_seed_coeffs = [
