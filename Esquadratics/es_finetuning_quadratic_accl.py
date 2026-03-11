@@ -230,8 +230,8 @@ def load_quadratic_data(data_path, tokenizer, data_sample=200):
     if not data_path:
         # Default to the medhard train dataset
         candidates = [
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), "Dataset", "quad_medhard_train.parquet"),
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), "Dataset", "quad_diverse_train.parquet"),
+            os.path.join(os.path.dirname(__file__), "Dataset", "quad_medhard_train.parquet"),
+            os.path.join(os.path.dirname(__file__), "Dataset", "quad_diverse_train.parquet"),
         ]
         data_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
 
