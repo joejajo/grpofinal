@@ -53,7 +53,7 @@ python "${SCRIPT}" \
   --num_iterations          ${NUM_ITERS} \
   --sigma                   0.001 \
   --alpha                   0.0005 \
-  --data_sample             0 \
+  --data_sample             500 \
   --data_path               "${DATA_PARQUET}" \
   --eval_data               "${EVAL_PARQUET}" \
   --eval_every_iters        50 \
