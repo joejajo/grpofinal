@@ -53,12 +53,14 @@ python "${SCRIPT}" \
   --num_iterations          ${NUM_ITERS} \
   --sigma                   0.001 \
   --alpha                   0.0005 \
-  --data_sample             0 \
+  --data_sample             500 \
   --data_path               "${DATA_PARQUET}" \
+  --eval_data               "${EVAL_PARQUET}" \
+  --eval_every_iters        1 \
   --experiment_dir          "${OUT_DIR}/es_experiment" \
   --max_tokens              1024 \
   --dtype                   float16 \
-  --csv_every_iters         50 \
+  --csv_every_iters         1 \
   --verbose
 
 echo "ES experiment dir: ${OUT_DIR}/es_experiment"
