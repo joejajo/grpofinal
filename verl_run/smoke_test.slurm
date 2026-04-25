@@ -94,20 +94,29 @@ print('reward_model:', ex['reward_model'])
 import sys
 sys.path.insert(0, '${VERL_RUN_DIR}')
 from quadratic_reward import compute_score
+# (a, b, c) = (1, -5, 6)  =>  x^2 - 5x + 6 = (x-2)(x-3)  =>  roots {2, 3}
 gt = {'r1': 2, 'r2': 3}
+extra = {'a': 1, 'b': -5, 'c': 6, 'r1': 2, 'r2': 3}
+# Long reasoning trigger keywords for full math+format+reasoning bonus.
+reasoning = 'using the quadratic formula and discriminant b^2-4ac to factor the equation, I get '
 cases = [
-  ('exact match',      r'reasoning... \boxed{2, 3}',  1.0),
-  ('exact (swapped)',  r'reasoning... \boxed{3, 2}',  1.0),
-  ('one root',         r'reasoning... \boxed{2, 9}',  0.5),
-  ('wrong',            r'reasoning... \boxed{7, 9}',  0.0),
-  ('unparseable',      r'no answer here',             0.0),
+  # (name, completion, expected_lower_bound, expected_upper_bound)
+  ('clean exact + reason',    reasoning + r'\boxed{2, 3}',  0.95, 1.00),
+  ('clean exact (swapped)',   reasoning + r'\boxed{3, 2}',  0.95, 1.00),
+  ('boxed only (no reason)',  r'\boxed{2, 3}',              0.92, 1.00),
+  ('one root',                reasoning + r'\boxed{2, 9}',  0.30, 0.55),
+  ('wrong roots',             reasoning + r'\boxed{7, 9}', -0.01, 0.20),
+  ('unparseable',             r'no answer here',           -0.01, 0.01),
+  ('multiple boxed pairs',    r'\boxed{2,3} extra \boxed{2,3}', -0.01, 0.70),
+  ('trailing junk after box', r'\boxed{2, 3} foo bar',      0.00, 0.70),
 ]
 ok = True
-for name, sol, expected in cases:
-  got = compute_score('quadratic/roots', sol, gt)
-  flag = 'OK' if got == expected else 'FAIL'
-  print(f'{flag}  {name:18s} got={got} expected={expected}')
-  ok = ok and (got == expected)
+for name, sol, lo, hi in cases:
+  got = compute_score('quadratic/roots', sol, gt, extra)
+  in_range = (lo <= got <= hi)
+  flag = 'OK' if in_range else 'FAIL'
+  print(f'{flag}  {name:25s} got={got:.4f} expected in [{lo}, {hi}]')
+  ok = ok and in_range
 sys.exit(0 if ok else 1)
 \"
 
