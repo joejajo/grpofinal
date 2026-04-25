@@ -27,7 +27,7 @@ SYSTEM_PROMPT = (
 
 def _to_int(x: Any) -> int:
     if isinstance(x, bool):
-        raise ValueError("Invalid input: boolean values are not supported for integer conversion")
+        raise ValueError(f"Invalid input for integer conversion: boolean value not supported (received: {x!r})")
     return int(x)
 
 
