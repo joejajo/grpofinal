@@ -62,6 +62,7 @@ apptainer exec --cleanenv --nv \
   "${SIF}" \
   bash -lc "
     set -e
+    set -o pipefail
     export PYTHONNOUSERSITE=1
     export PYTHONPATH='${BASE_DIR}/verl_src:${VERL_RUN_DIR}'
     export LD_LIBRARY_PATH='/tmp/joel_cupti_fix:/.singularity.d/libs'
