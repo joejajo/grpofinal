@@ -1,6 +1,7 @@
 #!/bin/bash -l
 #SBATCH --partition=rtx3080
 #SBATCH --gres=gpu:rtx3080:1
+#SBATCH --job-name=thesis_grpo_lora_rank16
 #SBATCH --time=12:00:00
 #SBATCH --output=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.out
 #SBATCH --error=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.err
@@ -69,8 +70,8 @@ accelerate launch \
   --generation_csv_every_steps 50 \
   --grpo_max_samples        500 \
   \
-  --lora_r                  64 \
-  --lora_alpha              128 \
+  --lora_r                  16 \
+  --lora_alpha              32 \
   --lora_dropout            0.05 \
   \
   --temperature             0.80 \
@@ -87,4 +88,3 @@ accelerate launch \
 
 echo "TensorBoard logdir: ${OUT_DIR}/tb"
 echo "Job complete: ${SLURM_JOB_ID}"
-
