@@ -55,7 +55,7 @@ ${_NV}/cublas/lib/libcublas.so.12:\
 ${_NV}/cublas/lib/libcublasLt.so.12"
 
 export APPTAINERENV_PYTHONNOUSERSITE=1
-export APPTAINERENV_PYTHONPATH="${VERL_RUN_DIR}"
+export APPTAINERENV_PYTHONPATH="${BASE_DIR}/verl_src:${VERL_RUN_DIR}"
 export APPTAINERENV_LD_LIBRARY_PATH="/tmp/joel_cupti_fix:/.singularity.d/libs"
 export APPTAINERENV_PYTHONUNBUFFERED=1
 export APPTAINERENV_VLLM_DISABLE_COMPILE_CACHE=1
@@ -83,7 +83,7 @@ apptainer exec --cleanenv --nv \
   bash -lc "
     set -euo pipefail
     export PYTHONNOUSERSITE=1
-    export PYTHONPATH='${VERL_RUN_DIR}'
+    export PYTHONPATH='${BASE_DIR}/verl_src:${VERL_RUN_DIR}'
     export LD_LIBRARY_PATH='/tmp/joel_cupti_fix:/.singularity.d/libs'
 
     python3 '${VERL_RUN_DIR}/prepare_quadratic_verl_data.py' \

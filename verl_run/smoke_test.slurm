@@ -44,7 +44,7 @@ ln -sf /opt/nvidia/nsight-systems/2025.3.2/target-linux-x64/libcupti.so.12.9 \
 
 # ── Apptainer environment (passed in via APPTAINERENV_ prefix under --cleanenv)
 export APPTAINERENV_PYTHONNOUSERSITE=1
-export APPTAINERENV_PYTHONPATH="${VERL_RUN_DIR}"
+export APPTAINERENV_PYTHONPATH="${BASE_DIR}/verl_src:${VERL_RUN_DIR}"
 export APPTAINERENV_LD_LIBRARY_PATH="/tmp/joel_cupti_fix:/.singularity.d/libs"
 
 # Same LD_PRELOAD wiring as the real slurm scripts — we test it here.
@@ -63,7 +63,7 @@ apptainer exec --cleanenv --nv \
   bash -lc "
     set -e
     export PYTHONNOUSERSITE=1
-    export PYTHONPATH='${VERL_RUN_DIR}'
+    export PYTHONPATH='${BASE_DIR}/verl_src:${VERL_RUN_DIR}'
     export LD_LIBRARY_PATH='/tmp/joel_cupti_fix:/.singularity.d/libs'
 
     echo '════════ 1. Python & key versions ════════'
