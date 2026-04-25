@@ -25,6 +25,28 @@ SIF="/home/woody/iwi7/iwi7107h/images/verl_vllm017_latest.sif"
 
 mkdir -p "${TMP_OUT}"
 
+# ── Pre-flight diagnostics ───────────────────────────────────────────────────
+apptainer --version
+echo "===== Job info ====="
+echo "SLURM_JOB_ID:        ${SLURM_JOB_ID}"
+echo "SLURM_JOB_NODELIST:  ${SLURM_JOB_NODELIST:-<not set>}"
+echo "SLURM_GPUS_ON_NODE:  ${SLURM_GPUS_ON_NODE:-<not set>}"
+echo "CUDA_VISIBLE_DEVICES:${CUDA_VISIBLE_DEVICES:-<not set>}"
+echo "SIF image:           ${SIF}"
+echo "===================="
+nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader || true
+echo "===================="
+
+# ── CUPTI fix: symlink host nsight-systems libcupti to expected name ─────────
+mkdir -p /tmp/joel_cupti_fix
+ln -sf /opt/nvidia/nsight-systems/2025.3.2/target-linux-x64/libcupti.so.12.9 \
+       /tmp/joel_cupti_fix/libcupti.so.12
+
+# ── Apptainer environment (passed in via APPTAINERENV_ prefix under --cleanenv)
+export APPTAINERENV_PYTHONNOUSERSITE=1
+export APPTAINERENV_PYTHONPATH="${VERL_RUN_DIR}"
+export APPTAINERENV_LD_LIBRARY_PATH="/tmp/joel_cupti_fix:/.singularity.d/libs"
+
 # Same LD_PRELOAD wiring as the real slurm scripts — we test it here.
 _NV="/usr/local/lib/python3.12/dist-packages/nvidia"
 export APPTAINERENV_LD_PRELOAD="\
@@ -33,12 +55,17 @@ ${_NV}/nccl/lib/libnccl.so.2:\
 ${_NV}/cublas/lib/libcublas.so.12:\
 ${_NV}/cublas/lib/libcublasLt.so.12"
 
-apptainer exec --nv \
+apptainer exec --cleanenv --nv \
   --bind "${BASE_DIR}:${BASE_DIR}" \
   --bind "/home/woody/iwi7/iwi7107h/models:/home/woody/iwi7/iwi7107h/models" \
+  --bind /tmp/joel_cupti_fix:/tmp/joel_cupti_fix \
   "${SIF}" \
-  bash -c "
+  bash -lc "
     set -e
+    export PYTHONNOUSERSITE=1
+    export PYTHONPATH='${VERL_RUN_DIR}'
+    export LD_LIBRARY_PATH='/tmp/joel_cupti_fix:/.singularity.d/libs'
+
     echo '════════ 1. Python & key versions ════════'
     python3 --version
     python3 -c 'import sys; print(\"sys.executable:\", sys.executable)'

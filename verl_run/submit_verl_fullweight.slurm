@@ -25,11 +25,28 @@ SIF="/home/woody/iwi7/iwi7107h/images/verl_vllm017_latest.sif"
 
 export TENSORBOARD_DIR="${OUTPUT_ROOT}/tensorboard"
 
-# ── Environment ───────────────────────────────────────────────────────────────
-export PYTHONPATH="${VERL_RUN_DIR}:${PYTHONPATH:-}"
-export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
-export PATH="${CUDA_HOME}/bin:${PATH}"
+# ── Pre-flight (host-side) ────────────────────────────────────────────────────
+mkdir -p "${OUTPUT_ROOT}" "${TENSORBOARD_DIR}" "${VERL_DATA_DIR}" "/tmp/r${SLURM_JOB_ID}"
+ulimit -n 65536 2>/dev/null || true
 
+apptainer --version
+echo "===== Job info ====="
+echo "SLURM_JOB_ID:        ${SLURM_JOB_ID}"
+echo "SLURM_JOB_NODELIST:  ${SLURM_JOB_NODELIST:-<not set>}"
+echo "SLURM_GPUS_ON_NODE:  ${SLURM_GPUS_ON_NODE:-<not set>}"
+echo "CUDA_VISIBLE_DEVICES:${CUDA_VISIBLE_DEVICES:-<not set>}"
+echo "SIF image:           ${SIF}"
+echo "OUTPUT_ROOT:         ${OUTPUT_ROOT}"
+echo "===================="
+nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader || true
+echo "===================="
+
+# ── CUPTI fix: symlink host nsight-systems libcupti to expected name ─────────
+mkdir -p /tmp/joel_cupti_fix
+ln -sf /opt/nvidia/nsight-systems/2025.3.2/target-linux-x64/libcupti.so.12.9 \
+       /tmp/joel_cupti_fix/libcupti.so.12
+
+# ── Apptainer environment (under --cleanenv only APPTAINERENV_* are passed in)
 _NV="/usr/local/lib/python3.12/dist-packages/nvidia"
 export APPTAINERENV_LD_PRELOAD="\
 ${_NV}/cuda_cupti/lib/libcupti.so.12:\
@@ -37,37 +54,37 @@ ${_NV}/nccl/lib/libnccl.so.2:\
 ${_NV}/cublas/lib/libcublas.so.12:\
 ${_NV}/cublas/lib/libcublasLt.so.12"
 
-unset VLLM_ATTENTION_BACKEND
-unset ROCR_VISIBLE_DEVICES
-export VLLM_DISABLE_COMPILE_CACHE=1
-export PYTHONUNBUFFERED=1
-export PYTHONNOUSERSITE=1
+export APPTAINERENV_PYTHONNOUSERSITE=1
+export APPTAINERENV_PYTHONPATH="${VERL_RUN_DIR}"
+export APPTAINERENV_LD_LIBRARY_PATH="/tmp/joel_cupti_fix:/.singularity.d/libs"
+export APPTAINERENV_PYTHONUNBUFFERED=1
+export APPTAINERENV_VLLM_DISABLE_COMPILE_CACHE=1
 export APPTAINERENV_UV_THREADPOOL_SIZE=4
-export PYTHONWARNINGS="ignore:Unsupported processor type"
-export WANDB_MODE=disabled
-export WANDB_DISABLED=true
-export TMPDIR=/tmp
-export RAY_TMPDIR="/tmp/r${SLURM_JOB_ID}"
-export TOKENIZERS_PARALLELISM=false
-export TF_ENABLE_ONEDNN_OPTS=0
-export NCCL_IB_DISABLE=1
-export NCCL_P2P_DISABLE=1
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128
-export RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE=1
-
-ulimit -n 65536 2>/dev/null || true
-mkdir -p "${OUTPUT_ROOT}" "${TENSORBOARD_DIR}" "${VERL_DATA_DIR}" "/tmp/r${SLURM_JOB_ID}"
+export APPTAINERENV_PYTHONWARNINGS="ignore:Unsupported processor type"
+export APPTAINERENV_WANDB_MODE=disabled
+export APPTAINERENV_WANDB_DISABLED=true
+export APPTAINERENV_TMPDIR=/tmp
+export APPTAINERENV_RAY_TMPDIR="/tmp/r${SLURM_JOB_ID}"
+export APPTAINERENV_TOKENIZERS_PARALLELISM=false
+export APPTAINERENV_TF_ENABLE_ONEDNN_OPTS=0
+export APPTAINERENV_NCCL_IB_DISABLE=1
+export APPTAINERENV_NCCL_P2P_DISABLE=1
+export APPTAINERENV_PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128
+export APPTAINERENV_RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE=1
 
 command -v apptainer >/dev/null 2>&1 || { echo "apptainer not found on host"; exit 1; }
 
 # ── Run (full weight — no LoRA, A100 40 GB) ──────────────────────────────────
-apptainer exec \
-  --nv \
+apptainer exec --cleanenv --nv \
   --bind "${BASE_DIR}:${BASE_DIR}" \
   --bind "/home/woody/iwi7/iwi7107h/models:/home/woody/iwi7/iwi7107h/models" \
+  --bind /tmp/joel_cupti_fix:/tmp/joel_cupti_fix \
   "${SIF}" \
-  bash -c "
+  bash -lc "
     set -euo pipefail
+    export PYTHONNOUSERSITE=1
+    export PYTHONPATH='${VERL_RUN_DIR}'
+    export LD_LIBRARY_PATH='/tmp/joel_cupti_fix:/.singularity.d/libs'
 
     python3 '${VERL_RUN_DIR}/prepare_quadratic_verl_data.py' \
       --train_in '${TRAIN_PARQUET}' \
