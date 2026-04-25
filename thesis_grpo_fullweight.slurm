@@ -34,6 +34,8 @@ export NCCL_P2P_DISABLE=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128
 
 SCRIPT="${BASE_DIR}/grpo_quad_train_v12.py"
+PLOT_SCRIPT="${BASE_DIR}/plot_grpo_results.py"
+PLOTS_DIR="${OUT_DIR}/plots"
 
 accelerate launch \
   --num_processes 1 \
@@ -59,15 +61,17 @@ accelerate launch \
   --max_prompt_length       512 \
   --max_completion_length   1024 \
   \
-  --eval_every_steps        100 \
+  --eval_every_steps        50 \
   --eval_max_samples        0 \
   --eval_batch_size         8 \
   --eval_max_new_tokens     512 \
   \
-  --disable_jsonl_export \
   --train_csv_path          "${OUT_DIR}/train_generations.csv" \
   --eval_csv_path           "${OUT_DIR}/eval_generations.csv" \
-  --generation_csv_every_steps 50 \
+  --generation_csv_every_steps 25 \
+  --jsonl_export_dir        "${OUT_DIR}/jsonl" \
+  --jsonl_num_examples      48 \
+  --jsonl_train_every_steps 100 \
   --grpo_max_samples        500 \
   \
   --disable_lora \
@@ -84,5 +88,11 @@ accelerate launch \
   --debug_print_equation \
   --debug_print_effective
 
+mkdir -p "${PLOTS_DIR}"
+if [ -f "${PLOT_SCRIPT}" ]; then
+  python "${PLOT_SCRIPT}" --exp_dir "${OUT_DIR}" --save_dir "${PLOTS_DIR}" --csv || true
+fi
+
 echo "TensorBoard logdir: ${OUT_DIR}/tb"
+echo "Plots directory: ${PLOTS_DIR}"
 echo "Job complete: ${SLURM_JOB_ID}"
