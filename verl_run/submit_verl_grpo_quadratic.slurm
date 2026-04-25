@@ -28,7 +28,6 @@ export OUTPUT_ROOT="${BASE_DIR}/Output/result_${SLURM_JOB_ID}"
 export ONESHOT_DIR="${PROJECT_ROOT}"
 
 export WANDB_MODE=disabled
-export WANDB_DISABLED=true
 export TENSORBOARD_DIR="${OUTPUT_ROOT}/tensorboard"
 
 SDPO_DIR="${PROJECT_ROOT}/SDPO"
@@ -38,6 +37,8 @@ export PYTHONPATH="${ONESHOT_DIR}:${SDPO_DIR}:${PKGS_DIR}:${PYTHONPATH:-}"
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 export PATH="${CUDA_HOME}/bin:${PATH}"
 
+# NOTE: These paths are intentionally pinned for the current container/runtime
+# stack (Python 3.12 + CUDA 12.x NVIDIA wheels on this cluster image).
 _NV="/usr/local/lib/python3.12/dist-packages/nvidia"
 export APPTAINERENV_LD_PRELOAD="\
 ${_NV}/cuda_cupti/lib/libcupti.so.12:\
