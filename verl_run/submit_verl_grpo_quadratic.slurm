@@ -111,6 +111,7 @@ apptainer exec --cleanenv --nv \
         fi
       done ) &
     _CLEANUP_PID=\$!
+    trap 'kill \"\${_CLEANUP_PID}\" 2>/dev/null || true' EXIT INT TERM
 
     python3 -m verl.trainer.main_ppo \
       algorithm.adv_estimator=grpo \
