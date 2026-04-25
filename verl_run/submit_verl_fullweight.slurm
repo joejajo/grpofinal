@@ -91,6 +91,21 @@ apptainer exec --cleanenv --nv \
       --val_in   '${VAL_PARQUET}' \
       --out_dir  '${VERL_DATA_DIR}'
 
+    # ── Background checkpoint manager: keep only the 2 most recent ───────────
+    _CKPT_DIR='${OUTPUT_ROOT}'
+    ( while true; do
+        sleep 180
+        _n=\$(ls -d \"\${_CKPT_DIR}\"/global_step_* 2>/dev/null | wc -l)
+        if [ \"\${_n}\" -gt 2 ]; then
+          ls -d \"\${_CKPT_DIR}\"/global_step_* 2>/dev/null \
+            | sort -t_ -k3 -n \
+            | head -n \$(( _n - 2 )) \
+            | xargs -r rm -rf
+          echo \"[ckpt] Deleted old checkpoints, kept 2 latest\"
+        fi
+      done ) &
+    _CLEANUP_PID=\$!
+
     python3 -m verl.trainer.main_ppo \
       algorithm.adv_estimator=grpo \
       trainer.val_before_train=True \
@@ -130,9 +145,14 @@ apptainer exec --cleanenv --nv \
       trainer.n_gpus_per_node=1 \
       trainer.nnodes=1 \
       trainer.default_local_dir='${OUTPUT_ROOT}' \
-      trainer.save_freq=20 \
-      trainer.test_freq=5 \
+      trainer.save_freq=50 \
+      trainer.test_freq=50 \
       trainer.total_epochs=10
+
+    # ── Stop background cleanup; list surviving checkpoints ───────────────────
+    kill \"\${_CLEANUP_PID}\" 2>/dev/null || true
+    echo \"=== Saved checkpoints (compare step numbers against TensorBoard val/test_score_mean) ===\"
+    ls -d \"\${_CKPT_DIR}\"/global_step_* 2>/dev/null | sort -t_ -k3 -n || echo \"(none)\"
   "
 
 echo "TensorBoard logdir: ${TENSORBOARD_DIR}"
