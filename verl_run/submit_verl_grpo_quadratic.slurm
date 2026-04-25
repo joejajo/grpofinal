@@ -32,9 +32,9 @@ export PYTHONPATH="${ONESHOT_DIR}:${SDPO_DIR}:${PKGS_DIR}:${PYTHONPATH:-}"
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 export PATH="${CUDA_HOME}/bin:${PATH}"
 
-# NOTE: These paths are intentionally pinned for the current container/runtime
-# stack (Python 3.12 + CUDA 12.x NVIDIA wheels on this cluster image).
-_NV="/usr/local/lib/python3.12/dist-packages/nvidia"
+# NOTE: Set NV_PY_SITE if your image stores NVIDIA python wheels elsewhere.
+# Default targets current container/runtime (Python 3.12 + CUDA 12.x wheels).
+_NV="${NV_PY_SITE:-/usr/local/lib/python3.12/dist-packages/nvidia}"
 export APPTAINERENV_LD_PRELOAD="\
 ${_NV}/cuda_cupti/lib/libcupti.so.12:\
 ${_NV}/nccl/lib/libnccl.so.2:\
@@ -60,7 +60,7 @@ mkdir -p "${OUTPUT_ROOT}" "${TENSORBOARD_DIR}" "${RAY_TMPDIR}"
 
 # Optional: point to local model path for faster startup.
 export MODEL_PATH="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
-export IMAGE_PATH="${IMAGE_PATH:?Set IMAGE_PATH to your Apptainer/Singularity .sif image}"
+export IMAGE_PATH="${IMAGE_PATH:?Set IMAGE_PATH before sbatch, e.g. export IMAGE_PATH=/path/to/verl_cuda.sif}"
 
 export APPTAINERENV_BASE_DIR="${BASE_DIR}"
 export APPTAINERENV_MODEL_PATH="${MODEL_PATH}"
@@ -71,6 +71,7 @@ export APPTAINERENV_TENSORBOARD_DIR="${TENSORBOARD_DIR}"
 apptainer exec \
   --nv \
   --cleanenv \
+  # Bind host BASE_DIR at the same in-container path so existing scripts/paths remain unchanged.
   --bind "${BASE_DIR}:${BASE_DIR}" \
   "${IMAGE_PATH}" \
   bash "${BASE_DIR}/verl_run/run_verl_grpo_quadratic.sh"
