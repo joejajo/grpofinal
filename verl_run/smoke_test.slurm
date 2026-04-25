@@ -20,10 +20,11 @@ export BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"
 export VERL_RUN_DIR="${BASE_DIR}/verl_run"
 TRAIN_PARQUET="${BASE_DIR}/Dataset/quad_medhard_train.parquet"
 VAL_PARQUET="${BASE_DIR}/Dataset/quad_medhard_eval.parquet"
-TMP_OUT="/tmp/verl_smoke_${SLURM_JOB_ID}"
+TMP_OUT="${BASE_DIR}/Output/smoke_${SLURM_JOB_ID}"
 SIF="/home/woody/iwi7/iwi7107h/images/verl_vllm017_latest.sif"
 
 mkdir -p "${TMP_OUT}"
+echo "Smoke artifacts will be saved to: ${TMP_OUT}"
 
 # ── Pre-flight diagnostics ───────────────────────────────────────────────────
 apptainer --version
