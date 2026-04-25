@@ -1,7 +1,7 @@
 #!/bin/bash -l
-#SBATCH --partition=a100
-#SBATCH --gres=gpu:a100:1
-#SBATCH --job-name=thesis_grpo_fullweight
+#SBATCH --partition=rtx3080
+#SBATCH --gres=gpu:rtx3080:1
+#SBATCH --job-name=thesis_grpo_lora_rank32
 #SBATCH --time=12:00:00
 #SBATCH --output=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.out
 #SBATCH --error=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.err
@@ -51,7 +51,7 @@ accelerate launch \
   --tb_log_dir              "${OUT_DIR}/tb" \
   \
   --max_steps               2000 \
-  --learning_rate           1e-6 \
+  --learning_rate           1.5e-6 \
   --warmup_steps            100 \
   --seed                    42 \
   --beta                    0.002 \
@@ -72,7 +72,9 @@ accelerate launch \
   --jsonl_train_every_steps 100 \
   --grpo_max_samples        500 \
   \
-  --disable_lora \
+  --lora_r                  32 \
+  --lora_alpha              64 \
+  --lora_dropout            0.05 \
   \
   --temperature             0.80 \
   --top_p                   0.95 \
