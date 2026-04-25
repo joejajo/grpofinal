@@ -1,3 +1,14 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Third-party verl source clone (cloned separately on each machine)
+verl_src/
+
+# Training outputs and tensorboard logs (large, machine-specific)
+Output/
+verl_run/data_quadratic_verl/
+
+# Backup directories
+*_old/
+*_backup/
