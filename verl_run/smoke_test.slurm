@@ -15,9 +15,6 @@
 unset SLURM_EXPORT_ENV
 set -euo pipefail
 
-module purge
-module load cuda/12.4.1
-module load apptainer
 
 export BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"
 export VERL_RUN_DIR="${BASE_DIR}/verl_run"
