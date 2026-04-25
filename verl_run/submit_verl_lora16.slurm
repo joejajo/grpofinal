@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=verl_quad_grpo
+#SBATCH --job-name=verl_quad_lora16
 #SBATCH --partition=rtx3080
 #SBATCH --gres=gpu:rtx3080:1
 #SBATCH --time=12:00:00
@@ -63,7 +63,7 @@ mkdir -p "${OUTPUT_ROOT}" "${TENSORBOARD_DIR}" "${VERL_DATA_DIR}" "/tmp/r${SLURM
 
 command -v apptainer >/dev/null 2>&1 || { echo "apptainer not found on host"; exit 1; }
 
-# ── Run ───────────────────────────────────────────────────────────────────────
+# ── Run (LoRA rank=16, alpha=32) ──────────────────────────────────────────────
 apptainer exec \
   --nv \
   --bind "${BASE_DIR}:${BASE_DIR}" \
@@ -90,6 +90,9 @@ apptainer exec \
       actor_rollout_ref.model.path='${MODEL_PATH}' \
       actor_rollout_ref.model.use_remove_padding=True \
       actor_rollout_ref.model.enable_gradient_checkpointing=True \
+      actor_rollout_ref.model.lora_rank=16 \
+      actor_rollout_ref.model.lora_alpha=32 \
+      actor_rollout_ref.model.lora_dropout=0.05 \
       actor_rollout_ref.actor.optim.lr=1.5e-6 \
       actor_rollout_ref.actor.ppo_mini_batch_size=24 \
       actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
@@ -112,7 +115,7 @@ apptainer exec \
       trainer.critic_warmup=0 \
       trainer.logger='[\"console\",\"tensorboard\"]' \
       trainer.project_name=verl_quadratic_roots \
-      trainer.experiment_name=qwen25_05b_grpo \
+      trainer.experiment_name=qwen25_05b_lora16 \
       trainer.n_gpus_per_node=1 \
       trainer.nnodes=1 \
       trainer.default_local_dir='${OUTPUT_ROOT}' \

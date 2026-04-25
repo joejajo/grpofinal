@@ -1,8 +1,8 @@
 #!/bin/bash -l
-#SBATCH --job-name=verl_quad_grpo
+#SBATCH --job-name=verl_quad_fullweight
 #SBATCH --partition=rtx3080
 #SBATCH --gres=gpu:rtx3080:1
-#SBATCH --time=12:00:00
+#SBATCH --time=16:00:00
 #SBATCH --output=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.out
 #SBATCH --error=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.err
 #SBATCH --export=NONE
@@ -63,7 +63,11 @@ mkdir -p "${OUTPUT_ROOT}" "${TENSORBOARD_DIR}" "${VERL_DATA_DIR}" "/tmp/r${SLURM
 
 command -v apptainer >/dev/null 2>&1 || { echo "apptainer not found on host"; exit 1; }
 
-# ── Run ───────────────────────────────────────────────────────────────────────
+# ── Run (full weight — no LoRA) ───────────────────────────────────────────────
+# Memory budget on 9.6 GiB RTX 3080:
+#   optimizer_offload=True  frees ~4 GB AdamW states to CPU
+#   vllm utilization=0.30   reserves ~2.9 GB for generation
+#   leaves ~2.7 GB for weights + gradients + activations
 apptainer exec \
   --nv \
   --bind "${BASE_DIR}:${BASE_DIR}" \
@@ -98,11 +102,11 @@ apptainer exec \
       actor_rollout_ref.actor.kl_loss_type=low_var_kl \
       actor_rollout_ref.actor.entropy_coeff=0 \
       actor_rollout_ref.actor.fsdp_config.param_offload=False \
-      actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+      actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
       actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
       actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
       actor_rollout_ref.rollout.name=vllm \
-      actor_rollout_ref.rollout.gpu_memory_utilization=0.45 \
+      actor_rollout_ref.rollout.gpu_memory_utilization=0.30 \
       actor_rollout_ref.rollout.n=12 \
       actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
       actor_rollout_ref.ref.fsdp_config.param_offload=True \
@@ -112,7 +116,7 @@ apptainer exec \
       trainer.critic_warmup=0 \
       trainer.logger='[\"console\",\"tensorboard\"]' \
       trainer.project_name=verl_quadratic_roots \
-      trainer.experiment_name=qwen25_05b_grpo \
+      trainer.experiment_name=qwen25_05b_fullweight \
       trainer.n_gpus_per_node=1 \
       trainer.nnodes=1 \
       trainer.default_local_dir='${OUTPUT_ROOT}' \
