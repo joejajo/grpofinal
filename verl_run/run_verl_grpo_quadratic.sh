@@ -32,7 +32,6 @@ python3 -m verl.trainer.main_ppo \
   data.max_prompt_length=512 \
   data.max_response_length=1024 \
   data.filter_overlong_prompts=True \
-  data.truncation='left' \
   data.shuffle=True \
   actor_rollout_ref.model.path="${MODEL_PATH}" \
   actor_rollout_ref.actor.optim.lr=1.5e-6 \
