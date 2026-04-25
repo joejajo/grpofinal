@@ -124,7 +124,7 @@ def run_eval(args):
         base_model = AutoModelForCausalLM.from_pretrained(
             args.model_dir, torch_dtype=dtype_map[args.dtype]
         )
-        es_state = torch.load(args.weights_path, map_location="cpu")
+        es_state = torch.load(args.weights_path, map_location="cpu", weights_only=True)
         base_model.load_state_dict(es_state, strict=False)
 
         # Save patched model to temp dir for vLLM

@@ -3,7 +3,7 @@
 
 """
 GRPO (Countdown/R1-style) for Quadratic Integer Roots  [v12]
-Compatible with: TRL 0.24.x + vLLM 0.10.2
+Compatible with: TRL 0.24.x + vLLM 0.18.x
 
 v12 changes vs v11:
   - Targets medium+hard only dataset (quad_medhard_train.parquet / quad_medhard_eval.parquet)

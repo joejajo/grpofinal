@@ -53,7 +53,7 @@ module load python/3.12-conda
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
 set +u
-conda activate myenv
+conda activate /home/woody/iwi7/iwi7107h/conda_envs/grpo_quad_v13/
 set -u
 
 BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"

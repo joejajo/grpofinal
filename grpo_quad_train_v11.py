@@ -3,7 +3,7 @@
 
 """
 GRPO (Countdown/R1-style) for Quadratic Integer Roots  [v11]
-Compatible with: TRL 0.24.x + vLLM 0.10.2
+Compatible with: TRL 0.24.x + vLLM 0.18.x
 
 v11 changes vs v10:
   - LoRA now covers MLP layers (gate_proj, up_proj, down_proj) in addition to attention

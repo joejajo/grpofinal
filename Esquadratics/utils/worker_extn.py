@@ -16,9 +16,33 @@ import time
 import torch
 
 
+def _import_stateless_pg():
+    """Import StatelessProcessGroup with fallback for vLLM API location changes."""
+    # vLLM 0.18.x moved StatelessProcessGroup; try multiple known locations.
+    try:
+        from vllm.distributed.utils import StatelessProcessGroup
+        return StatelessProcessGroup
+    except ImportError:
+        pass
+    try:
+        from vllm.distributed.device_communicators.pynccl_wrapper import StatelessProcessGroup
+        return StatelessProcessGroup
+    except ImportError:
+        pass
+    try:
+        from vllm.distributed.communication_op import StatelessProcessGroup
+        return StatelessProcessGroup
+    except ImportError:
+        pass
+    raise ImportError(
+        "Could not import StatelessProcessGroup from vllm. "
+        "Check vLLM version compatibility."
+    )
+
+
 def _stateless_init_process_group(master_address, master_port, rank, world_size, device):
     from vllm.distributed.device_communicators.pynccl import PyNcclCommunicator
-    from vllm.distributed.utils import StatelessProcessGroup
+    StatelessProcessGroup = _import_stateless_pg()
     pg = StatelessProcessGroup.create(
         host=master_address, port=master_port, rank=rank, world_size=world_size
     )
