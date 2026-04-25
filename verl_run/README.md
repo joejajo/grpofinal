@@ -40,6 +40,46 @@ Copy `verl_run/` to your HPC project directory (already consistent with your exi
 sbatch /home/woody/iwi7/iwi7107h/GRPO_Quad/verl_run/submit_verl_grpo_quadratic.slurm
 ```
 
+## Final cleaned folder tree
+
+Repository root (example: `/path/to/grpofinal`):
+
+```text
+grpofinal/
+├── Dataset/
+│   └── *.parquet
+├── verl_run/
+│   ├── prepare_quadratic_verl_data.py
+│   ├── quadratic_reward.py
+│   ├── run_verl_grpo_quadratic.sh
+│   ├── submit_verl_grpo_quadratic.slurm
+│   └── README.md
+├── Esquadratics/
+└── (legacy GRPO/ES scripts at repo root)
+```
+
+HPC project root (example: `/home/woody/iwi7/iwi7107h/GRPO_Quad`):
+
+```text
+GRPO_Quad/
+├── Dataset/
+├── verl_run/
+└── Output/   # training logs/results
+```
+
+## Single start command checklist
+
+- [ ] Ensure `Dataset/*.parquet` exists in your project directory.
+- [ ] Ensure `IMAGE_PATH` points to your Apptainer/Singularity image with VERL preinstalled.
+- [ ] Ensure `MODEL_PATH` in `submit_verl_grpo_quadratic.slurm` is valid (or export your own).
+- [ ] Submit training from HPC:
+
+```bash
+sbatch <HPC_PROJECT_DIR>/verl_run/submit_verl_grpo_quadratic.slurm
+# example:
+# sbatch /home/woody/iwi7/iwi7107h/GRPO_Quad/verl_run/submit_verl_grpo_quadratic.slurm
+```
+
 ## Important notes
 
 - These scripts assume VERL is already installed in your environment/container.
