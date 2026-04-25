@@ -20,14 +20,14 @@ cd "${BASE_DIR}"
 
 export PROJECT_ROOT="${BASE_DIR}"
 export OUTPUT_ROOT="${BASE_DIR}/Output/result_${SLURM_JOB_ID}"
-export ONESHOT_DIR="${PROJECT_ROOT}"
+export VERL_RUN_DIR="${BASE_DIR}/verl_run"
 
 SIF=/home/woody/iwi7/iwi7107h/images/verl_vllm017_latest.sif
 
 export MODEL_PATH="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
 export TENSORBOARD_DIR="${OUTPUT_ROOT}/tensorboard"
 
-export PYTHONPATH="${ONESHOT_DIR}:${PYTHONPATH:-}"
+export PYTHONPATH="${VERL_RUN_DIR}:${PYTHONPATH:-}"
 
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 export PATH="${CUDA_HOME}/bin:${PATH}"
