@@ -982,6 +982,7 @@ def main():
     ap.add_argument("--min_think_chars", type=int, default=120)
     ap.add_argument("--generation_csv_path", type=str, default="", help="CSV file for per-generation prompt/model_output/reward rows")
     ap.add_argument("--generation_csv_every_steps", type=int, default=50, help="Write generation CSV every N global steps; 0 disables")
+    ap.add_argument("--disable_csv_export", action="store_true", help="Disable CSV export for generation outputs.")
 
     # LoRA
     ap.add_argument("--lora_r", type=int, default=16)
@@ -1011,8 +1012,12 @@ def main():
     DEBUG_PRINT_EQUATION = bool(args.debug_print_equation)
     DEBUG_PRINT_EFFECTIVE = bool(args.debug_print_effective)
     MIN_THINK_CHARS = int(args.min_think_chars)
-    GEN_CSV_PATH = args.generation_csv_path if args.generation_csv_path else os.path.join(args.output_dir, "generation_outputs.csv")
-    GEN_CSV_EVERY = max(0, int(args.generation_csv_every_steps))
+    if args.disable_csv_export:
+        GEN_CSV_PATH = ""
+        GEN_CSV_EVERY = 0
+    else:
+        GEN_CSV_PATH = args.generation_csv_path if args.generation_csv_path else os.path.join(args.output_dir, "generation_outputs.csv")
+        GEN_CSV_EVERY = max(0, int(args.generation_csv_every_steps))
     GEN_CSV_LAST_STEP = -1
     if is_rank0() and GEN_CSV_EVERY > 0:
         log.info("[CSV] generation export enabled every=%d path=%s", GEN_CSV_EVERY, GEN_CSV_PATH)
@@ -1307,7 +1312,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
