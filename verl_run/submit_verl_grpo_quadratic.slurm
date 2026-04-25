@@ -60,7 +60,7 @@ mkdir -p "${OUTPUT_ROOT}" "${TENSORBOARD_DIR}" "${RAY_TMPDIR}"
 
 # Optional: point to local model path for faster startup.
 export MODEL_PATH="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
-export IMAGE_PATH="${IMAGE_PATH:?Set IMAGE_PATH before sbatch, e.g. export IMAGE_PATH=/path/to/verl_cuda.sif}"
+export IMAGE_PATH="${IMAGE_PATH:?Set IMAGE_PATH in your shell (or sbatch --export), e.g. export IMAGE_PATH=/path/to/verl_cuda.sif}"
 
 export APPTAINERENV_BASE_DIR="${BASE_DIR}"
 export APPTAINERENV_MODEL_PATH="${MODEL_PATH}"
@@ -68,10 +68,10 @@ export APPTAINERENV_TMPDIR="${TMPDIR}"
 export APPTAINERENV_RAY_TMPDIR="${RAY_TMPDIR}"
 export APPTAINERENV_TENSORBOARD_DIR="${TENSORBOARD_DIR}"
 
+ # Bind host BASE_DIR at the same in-container path so existing scripts/paths remain unchanged.
 apptainer exec \
   --nv \
   --cleanenv \
-  # Bind host BASE_DIR at the same in-container path so existing scripts/paths remain unchanged.
   --bind "${BASE_DIR}:${BASE_DIR}" \
   "${IMAGE_PATH}" \
   bash "${BASE_DIR}/verl_run/run_verl_grpo_quadratic.sh"
