@@ -60,7 +60,7 @@ mkdir -p "${OUTPUT_ROOT}" "${TENSORBOARD_DIR}" "${RAY_TMPDIR}"
 
 # Optional: point to local model path for faster startup.
 export MODEL_PATH="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
-export IMAGE_PATH="${IMAGE_PATH:-/home/woody/iwi7/iwi7107h/GRPO_Quad/images/verl_cuda.sif}"
+export IMAGE_PATH="${IMAGE_PATH:?Set IMAGE_PATH to your Apptainer/Singularity .sif image}"
 
 export APPTAINERENV_BASE_DIR="${BASE_DIR}"
 export APPTAINERENV_MODEL_PATH="${MODEL_PATH}"
