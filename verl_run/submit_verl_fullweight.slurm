@@ -137,6 +137,7 @@ apptainer exec --cleanenv --nv \
       actor_rollout_ref.rollout.gpu_memory_utilization=0.45 \
       actor_rollout_ref.rollout.n=12 \
       actor_rollout_ref.rollout.enforce_eager=True \
+      actor_rollout_ref.rollout.enable_sleep_mode=False \
       actor_rollout_ref.rollout.free_cache_engine=False \
       actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
       actor_rollout_ref.ref.fsdp_config.param_offload=True \
