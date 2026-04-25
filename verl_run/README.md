@@ -42,7 +42,7 @@ sbatch /home/woody/iwi7/iwi7107h/GRPO_Quad/verl_run/submit_verl_grpo_quadratic.s
 
 ## Final cleaned folder tree
 
-Repository (`/home/runner/work/grpofinal/grpofinal`):
+Repository root (example: `/path/to/grpofinal`):
 
 ```text
 grpofinal/
@@ -58,7 +58,7 @@ grpofinal/
 └── (legacy GRPO/ES scripts at repo root)
 ```
 
-HPC (`/home/woody/iwi7/iwi7107h/GRPO_Quad`):
+HPC project root (example: `/home/woody/iwi7/iwi7107h/GRPO_Quad`):
 
 ```text
 GRPO_Quad/
@@ -75,7 +75,9 @@ GRPO_Quad/
 - [ ] Submit training from HPC:
 
 ```bash
-sbatch /home/woody/iwi7/iwi7107h/GRPO_Quad/verl_run/submit_verl_grpo_quadratic.slurm
+sbatch <HPC_PROJECT_DIR>/verl_run/submit_verl_grpo_quadratic.slurm
+# example:
+# sbatch /home/woody/iwi7/iwi7107h/GRPO_Quad/verl_run/submit_verl_grpo_quadratic.slurm
 ```
 
 ## Important notes
