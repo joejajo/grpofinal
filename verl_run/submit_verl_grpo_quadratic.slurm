@@ -14,7 +14,7 @@ module purge
 module load cuda/12.4.1
 module load apptainer
 
-BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"
+export BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"
 mkdir -p "${BASE_DIR}/Output/result_${SLURM_JOB_ID}"
 cd "${BASE_DIR}"
 

@@ -30,9 +30,9 @@ python3 -m verl.trainer.main_ppo \
   data.val_files="${VERL_DATA_DIR}/val.parquet" \
   data.train_batch_size=24 \
   data.max_prompt_length=512 \
-  data.max_response_length=512 \
+  data.max_response_length=1024 \
   data.filter_overlong_prompts=True \
-  data.truncation='error' \
+  data.truncation='left' \
   data.shuffle=True \
   actor_rollout_ref.model.path="${MODEL_PATH}" \
   actor_rollout_ref.actor.optim.lr=1.5e-6 \
@@ -57,11 +57,12 @@ python3 -m verl.trainer.main_ppo \
   reward.custom_reward_function.path="${BASE_DIR}/verl_run/quadratic_reward.py" \
   reward.custom_reward_function.name=compute_score \
   trainer.critic_warmup=0 \
-  trainer.logger='["console"]' \
+  trainer.logger='["console","tensorboard"]' \
   trainer.project_name="${PROJECT_NAME}" \
   trainer.experiment_name="${EXPERIMENT_NAME}" \
   trainer.n_gpus_per_node="${GPUS_PER_NODE}" \
   trainer.nnodes="${NNODES}" \
+  trainer.default_local_dir="${OUTPUT_ROOT:-${BASE_DIR}/Output}" \
   trainer.save_freq=20 \
   trainer.test_freq=5 \
   trainer.total_epochs=10 \
