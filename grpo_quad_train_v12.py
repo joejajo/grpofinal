@@ -1139,6 +1139,7 @@ def main():
     ap.add_argument("--lora_r", type=int, default=48)      # v12: 32->48 for harder arithmetic
     ap.add_argument("--lora_alpha", type=int, default=96)  # v12: 64->96 (keep ratio 2:1)
     ap.add_argument("--lora_dropout", type=float, default=0.05)
+    ap.add_argument("--disable_lora", action="store_true", help="Disable LoRA and train full model weights.")
 
     args = ap.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
@@ -1284,18 +1285,22 @@ def main():
     if is_rank0() and jsonl_export_enabled:
         log.info("[JSONL] enabled dir=%s split=%s examples=%d train_every=%d", jsonl_export_dir, probe_split, args.jsonl_num_examples, args.jsonl_train_every_steps)
 
-    # v11: added MLP layers (gate_proj, up_proj, down_proj) - essential for math reasoning
-    # Qwen2.5 uses SwiGLU MLP: gate*up projected then down-projected.
-    # Covering these dramatically increases the model's ability to learn numeric computation.
-    peft_cfg = LoraConfig(
-        r=args.lora_r,
-        lora_alpha=args.lora_alpha,
-        lora_dropout=args.lora_dropout,
-        bias="none",
-        task_type="CAUSAL_LM",
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                        "gate_proj", "up_proj", "down_proj"],
-    )
+    peft_cfg = None
+    if not args.disable_lora:
+        # v11: added MLP layers (gate_proj, up_proj, down_proj) - essential for math reasoning
+        # Qwen2.5 uses SwiGLU MLP: gate*up projected then down-projected.
+        # Covering these dramatically increases the model's ability to learn numeric computation.
+        peft_cfg = LoraConfig(
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                            "gate_proj", "up_proj", "down_proj"],
+        )
+    elif is_rank0():
+        log.info("[CONFIG] LoRA disabled; training full model weights.")
 
     attn_impl = "flash_attention_2"
     try:
@@ -1580,7 +1585,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
