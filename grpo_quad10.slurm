@@ -61,9 +61,7 @@ accelerate launch \
   --eval_max_samples        0 \
   --eval_batch_size         8 \
   --eval_max_new_tokens     1024 \
-  --disable_jsonl_export \
-  --generation_csv_path     "${OUT_DIR}/generation_outputs.csv" \
-  --generation_csv_every_steps 50 \
+  --disable_csv_export \
   --grpo_max_samples        0 \
   \
   --lora_r                  16 \

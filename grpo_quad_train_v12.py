@@ -1134,6 +1134,7 @@ def main():
     ap.add_argument("--train_csv_path", "--generation_csv_path", dest="train_csv_path", type=str, default="", help="CSV file for training-time prompt/model_output/reward rows (default: <output_dir>/train_generations.csv)")
     ap.add_argument("--eval_csv_path", type=str, default="", help="CSV file for eval-time prompt/model_output/correctness rows (default: <output_dir>/eval_generations.csv)")
     ap.add_argument("--generation_csv_every_steps", type=int, default=50, help="Write train generation CSV every N global steps; 0 disables")
+    ap.add_argument("--disable_csv_export", action="store_true", help="Disable CSV export for train/eval generation outputs.")
 
     # LoRA
     ap.add_argument("--lora_r", type=int, default=48)      # v12: 32->48 for harder arithmetic
@@ -1164,13 +1165,18 @@ def main():
     DEBUG_PRINT_EQUATION = bool(args.debug_print_equation)
     DEBUG_PRINT_EFFECTIVE = bool(args.debug_print_effective)
     MIN_THINK_CHARS = int(args.min_think_chars)
-    GEN_CSV_PATH = args.train_csv_path if args.train_csv_path else os.path.join(args.output_dir, "train_generations.csv")
-    EVAL_CSV_PATH = args.eval_csv_path if args.eval_csv_path else os.path.join(args.output_dir, "eval_generations.csv")
-    GEN_CSV_EVERY = max(0, int(args.generation_csv_every_steps))
+    if args.disable_csv_export:
+        GEN_CSV_PATH = ""
+        EVAL_CSV_PATH = ""
+        GEN_CSV_EVERY = 0
+    else:
+        GEN_CSV_PATH = args.train_csv_path if args.train_csv_path else os.path.join(args.output_dir, "train_generations.csv")
+        EVAL_CSV_PATH = args.eval_csv_path if args.eval_csv_path else os.path.join(args.output_dir, "eval_generations.csv")
+        GEN_CSV_EVERY = max(0, int(args.generation_csv_every_steps))
     GEN_CSV_LAST_STEP = -1
     if is_rank0() and GEN_CSV_EVERY > 0:
         log.info("[CSV] train generation export enabled every=%d path=%s", GEN_CSV_EVERY, GEN_CSV_PATH)
-    if is_rank0():
+    if is_rank0() and EVAL_CSV_PATH:
         log.info("[CSV] eval generation export path=%s", EVAL_CSV_PATH)
 
     # divisibility rule (single GPU)
@@ -1585,7 +1591,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 

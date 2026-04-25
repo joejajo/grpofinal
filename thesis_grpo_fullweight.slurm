@@ -66,9 +66,7 @@ accelerate launch \
   --eval_batch_size         8 \
   --eval_max_new_tokens     512 \
   \
-  --train_csv_path          "${OUT_DIR}/train_generations.csv" \
-  --eval_csv_path           "${OUT_DIR}/eval_generations.csv" \
-  --generation_csv_every_steps 25 \
+  --disable_csv_export \
   --jsonl_export_dir        "${OUT_DIR}/jsonl" \
   --jsonl_num_examples      48 \
   --jsonl_train_every_steps 100 \
@@ -90,7 +88,7 @@ accelerate launch \
 
 mkdir -p "${PLOTS_DIR}"
 if [ -f "${PLOT_SCRIPT}" ]; then
-  python "${PLOT_SCRIPT}" --exp_dir "${OUT_DIR}" --save_dir "${PLOTS_DIR}" --csv || true
+  python "${PLOT_SCRIPT}" --exp_dir "${OUT_DIR}" --save_dir "${PLOTS_DIR}" || true
 fi
 
 echo "TensorBoard logdir: ${OUT_DIR}/tb"
