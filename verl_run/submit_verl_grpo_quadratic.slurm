@@ -22,19 +22,17 @@ export PROJECT_ROOT="${BASE_DIR}"
 export OUTPUT_ROOT="${BASE_DIR}/Output/result_${SLURM_JOB_ID}"
 export ONESHOT_DIR="${PROJECT_ROOT}"
 
-export WANDB_MODE=disabled
+SIF=/home/woody/iwi7/iwi7107h/images/verl_vllm017_latest.sif
+
+export MODEL_PATH="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
 export TENSORBOARD_DIR="${OUTPUT_ROOT}/tensorboard"
 
-SDPO_DIR="${PROJECT_ROOT}/SDPO"
-PKGS_DIR="${PROJECT_ROOT}/pkgs"
-export PYTHONPATH="${ONESHOT_DIR}:${SDPO_DIR}:${PKGS_DIR}:${PYTHONPATH:-}"
+export PYTHONPATH="${ONESHOT_DIR}:${PYTHONPATH:-}"
 
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 export PATH="${CUDA_HOME}/bin:${PATH}"
 
-# NOTE: Set NV_PY_SITE if your image stores NVIDIA python wheels elsewhere.
-# Default targets current container/runtime (Python 3.12 + CUDA 12.x wheels).
-_NV="${NV_PY_SITE:-/usr/local/lib/python3.12/dist-packages/nvidia}"
+_NV="/usr/local/lib/python3.12/dist-packages/nvidia"
 export APPTAINERENV_LD_PRELOAD="\
 ${_NV}/cuda_cupti/lib/libcupti.so.12:\
 ${_NV}/nccl/lib/libnccl.so.2:\
@@ -48,6 +46,8 @@ export PYTHONUNBUFFERED=1
 export PYTHONNOUSERSITE=1
 export APPTAINERENV_UV_THREADPOOL_SIZE=4
 export PYTHONWARNINGS="ignore:Unsupported processor type"
+export WANDB_MODE=disabled
+export WANDB_DISABLED=true
 export TMPDIR=/tmp
 export RAY_TMPDIR="/tmp/r${SLURM_JOB_ID}"
 export TOKENIZERS_PARALLELISM=false
@@ -55,23 +55,17 @@ export TF_ENABLE_ONEDNN_OPTS=0
 export NCCL_IB_DISABLE=1
 export NCCL_P2P_DISABLE=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128
+export RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE=1
+
+ulimit -n 65536 2>/dev/null || true
 
 mkdir -p "${OUTPUT_ROOT}" "${TENSORBOARD_DIR}" "${RAY_TMPDIR}"
 
-# Optional: point to local model path for faster startup.
-export MODEL_PATH="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
-export IMAGE_PATH="${IMAGE_PATH:-${SIF:-/home/woody/iwi7/iwi7107h/images/verl_vllm017_latest.sif}}"
+command -v apptainer >/dev/null 2>&1 || { echo "apptainer not found on host"; exit 1; }
 
-export APPTAINERENV_BASE_DIR="${BASE_DIR}"
-export APPTAINERENV_MODEL_PATH="${MODEL_PATH}"
-export APPTAINERENV_TMPDIR="${TMPDIR}"
-export APPTAINERENV_RAY_TMPDIR="${RAY_TMPDIR}"
-export APPTAINERENV_TENSORBOARD_DIR="${TENSORBOARD_DIR}"
-
-# Bind host BASE_DIR at the same in-container path so existing scripts/paths remain unchanged.
 apptainer exec \
   --nv \
-  --cleanenv \
   --bind "${BASE_DIR}:${BASE_DIR}" \
-  "${IMAGE_PATH}" \
+  --bind "/home/woody/iwi7/iwi7107h/models:/home/woody/iwi7/iwi7107h/models" \
+  "${SIF}" \
   bash "${BASE_DIR}/verl_run/run_verl_grpo_quadratic.sh"
