@@ -12,12 +12,7 @@ set -euo pipefail
 
 module purge
 module load cuda/12.4.1
-module load python/3.12-conda
-source "$(conda info --base)/etc/profile.d/conda.sh"
-
-set +u
-conda activate myenv
-set -u
+module load apptainer
 
 BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"
 mkdir -p "${BASE_DIR}/Output/result_${SLURM_JOB_ID}"
@@ -65,5 +60,17 @@ mkdir -p "${OUTPUT_ROOT}" "${TENSORBOARD_DIR}" "${RAY_TMPDIR}"
 
 # Optional: point to local model path for faster startup.
 export MODEL_PATH="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
+export IMAGE_PATH="${IMAGE_PATH:-/home/woody/iwi7/iwi7107h/GRPO_Quad/images/verl_cuda.sif}"
 
-bash "${BASE_DIR}/verl_run/run_verl_grpo_quadratic.sh"
+export APPTAINERENV_BASE_DIR="${BASE_DIR}"
+export APPTAINERENV_MODEL_PATH="${MODEL_PATH}"
+export APPTAINERENV_TMPDIR="${TMPDIR}"
+export APPTAINERENV_RAY_TMPDIR="${RAY_TMPDIR}"
+export APPTAINERENV_TENSORBOARD_DIR="${TENSORBOARD_DIR}"
+
+apptainer exec \
+  --nv \
+  --cleanenv \
+  --bind "${BASE_DIR}:${BASE_DIR}" \
+  "${IMAGE_PATH}" \
+  bash "${BASE_DIR}/verl_run/run_verl_grpo_quadratic.sh"

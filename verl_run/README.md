@@ -70,7 +70,7 @@ GRPO_Quad/
 ## Single start command checklist
 
 - [ ] Ensure `Dataset/*.parquet` exists in your project directory.
-- [ ] Ensure VERL is installed in the active environment/container.
+- [ ] Ensure `IMAGE_PATH` points to your Apptainer/Singularity image with VERL preinstalled.
 - [ ] Ensure `MODEL_PATH` in `submit_verl_grpo_quadratic.slurm` is valid (or export your own).
 - [ ] Submit training from HPC:
 
