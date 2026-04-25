@@ -20,7 +20,7 @@ TRAIN_PARQUET="${BASE_DIR}/Dataset/quad_medhard_train.parquet"
 VAL_PARQUET="${BASE_DIR}/Dataset/quad_medhard_eval.parquet"
 VERL_DATA_DIR="${VERL_RUN_DIR}/data_quadratic_verl"
 
-export MODEL_PATH="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
+export MODEL_PATH="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct"
 SIF="/home/woody/iwi7/iwi7107h/images/verl_vllm017_latest.sif"
 
 export TENSORBOARD_DIR="${OUTPUT_ROOT}/tensorboard"
@@ -152,7 +152,8 @@ apptainer exec --cleanenv --nv \
       trainer.default_local_dir='${OUTPUT_ROOT}' \
       trainer.save_freq=50 \
       trainer.test_freq=50 \
-      trainer.total_epochs=10
+      trainer.total_epochs=10 \
+      trainer.max_actor_ckpt_to_keep=2
 
     # ── Stop background cleanup; list surviving checkpoints ───────────────────
     kill \"\${_CLEANUP_PID}\" 2>/dev/null || true
