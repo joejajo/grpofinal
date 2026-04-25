@@ -122,6 +122,7 @@ apptainer exec --cleanenv --nv \
       actor_rollout_ref.model.lora_rank=64 \
       actor_rollout_ref.model.lora_alpha=128 \
       actor_rollout_ref.model.target_modules=all-linear \
+      actor_rollout_ref.model.load_format=safetensors \
       actor_rollout_ref.actor.optim.lr=1.5e-6 \
       actor_rollout_ref.actor.ppo_mini_batch_size=24 \
       actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
@@ -136,6 +137,7 @@ apptainer exec --cleanenv --nv \
       actor_rollout_ref.rollout.name=vllm \
       actor_rollout_ref.rollout.gpu_memory_utilization=0.45 \
       actor_rollout_ref.rollout.n=12 \
+      actor_rollout_ref.rollout.layered_summon=True \
       actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
       actor_rollout_ref.ref.fsdp_config.param_offload=True \
       algorithm.use_kl_in_reward=False \
