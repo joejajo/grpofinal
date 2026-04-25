@@ -60,7 +60,7 @@ mkdir -p "${OUTPUT_ROOT}" "${TENSORBOARD_DIR}" "${RAY_TMPDIR}"
 
 # Optional: point to local model path for faster startup.
 export MODEL_PATH="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
-export IMAGE_PATH="${IMAGE_PATH:?IMAGE_PATH required. Set via: export IMAGE_PATH=/path/to/verl_cuda.sif}"
+export IMAGE_PATH="${IMAGE_PATH:-${SIF:-/home/woody/iwi7/iwi7107h/images/verl_vllm017_latest.sif}}"
 
 export APPTAINERENV_BASE_DIR="${BASE_DIR}"
 export APPTAINERENV_MODEL_PATH="${MODEL_PATH}"
