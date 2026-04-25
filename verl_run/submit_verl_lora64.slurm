@@ -71,6 +71,8 @@ export APPTAINERENV_NCCL_IB_DISABLE=1
 export APPTAINERENV_NCCL_P2P_DISABLE=1
 export APPTAINERENV_PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128
 export APPTAINERENV_RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE=1
+export APPTAINERENV_VLLM_LOGGING_LEVEL=DEBUG
+export APPTAINERENV_HYDRA_FULL_ERROR=1
 
 command -v apptainer >/dev/null 2>&1 || { echo "apptainer not found on host"; exit 1; }
 
@@ -138,6 +140,8 @@ apptainer exec --cleanenv --nv \
       actor_rollout_ref.rollout.n=12 \
       actor_rollout_ref.rollout.layered_summon=True \
       actor_rollout_ref.rollout.load_format=safetensors \
+      actor_rollout_ref.rollout.enforce_eager=True \
+      actor_rollout_ref.rollout.free_cache_engine=False \
       actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
       actor_rollout_ref.ref.fsdp_config.param_offload=True \
       algorithm.use_kl_in_reward=False \
