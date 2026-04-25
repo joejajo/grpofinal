@@ -53,6 +53,39 @@ import torch
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 from peft import LoraConfig
+
+
+def _patch_vllm_for_trl():
+    """
+    Re-export StatelessProcessGroup into vllm.distributed.utils so that
+    TRL's colocate-mode vLLM client can find it regardless of which vLLM
+    0.x release is installed.  The class moved across releases:
+      0.10.x  -> vllm.distributed.utils                              (TRL expects this)
+      0.14.x+ -> vllm.distributed.device_communicators.pynccl_wrapper
+    This patch is a no-op when the symbol is already present.
+    """
+    import importlib
+    try:
+        import vllm.distributed.utils as _vdu
+    except ImportError:
+        return
+    if hasattr(_vdu, "StatelessProcessGroup"):
+        return
+    for _src in (
+        "vllm.distributed.device_communicators.pynccl_wrapper",
+        "vllm.distributed.communication_op",
+    ):
+        try:
+            _m = importlib.import_module(_src)
+            if hasattr(_m, "StatelessProcessGroup"):
+                _vdu.StatelessProcessGroup = _m.StatelessProcessGroup
+                return
+        except ImportError:
+            continue
+
+
+_patch_vllm_for_trl()
+
 from trl import GRPOConfig, GRPOTrainer
 
 # -----------------------

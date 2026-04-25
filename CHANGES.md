@@ -52,10 +52,48 @@ All 9 SLURM job scripts were updated to activate the correct conda environment.
 
 ### 3. vLLM 0.18.x API compatibility fixes
 
+#### `grpo_quad_train_v10.py`, `grpo_quad_train_v11.py`, `grpo_quad_train_v12.py`
+
+**Root cause of the crash:** TRL's colocate-mode vLLM client imports
+`StatelessProcessGroup` from `vllm.distributed.utils`. In vLLM 0.14+ the class
+moved to `vllm.distributed.device_communicators.pynccl_wrapper`, so TRL raises
+an `ImportError` through its lazy module loader (`trl/import_utils.py` line 156).
+
+**Fix:** added a `_patch_vllm_for_trl()` call in each training script, placed
+immediately before `from trl import GRPOConfig, GRPOTrainer`. The function
+checks whether `StatelessProcessGroup` is already present in
+`vllm.distributed.utils`; if not, it searches two fallback locations and
+back-fills the attribute so TRL's import succeeds:
+
+```python
+def _patch_vllm_for_trl():
+    import importlib
+    try:
+        import vllm.distributed.utils as _vdu
+    except ImportError:
+        return
+    if hasattr(_vdu, "StatelessProcessGroup"):
+        return
+    for _src in (
+        "vllm.distributed.device_communicators.pynccl_wrapper",
+        "vllm.distributed.communication_op",
+    ):
+        try:
+            _m = importlib.import_module(_src)
+            if hasattr(_m, "StatelessProcessGroup"):
+                _vdu.StatelessProcessGroup = _m.StatelessProcessGroup
+                return
+        except ImportError:
+            continue
+
+_patch_vllm_for_trl()
+```
+
 #### `Esquadratics/utils/worker_extn.py`
 
-The `StatelessProcessGroup` class moved between vLLM releases. Replaced the single
-hard-coded import with a cascading fallback that tries all known locations:
+The same `StatelessProcessGroup` relocation also affected the ES worker
+extension. Replaced the single hard-coded import with a cascading fallback that
+tries all known locations:
 
 ```python
 # Before
@@ -184,9 +222,9 @@ git push origin main
 | `grpo_quad12.slurm` | conda env |
 | `es_quad_1gpu.slurm` | conda env |
 | `es_quad_4gpu.slurm` | conda env |
-| `grpo_quad_train_v10.py` | docstring |
-| `grpo_quad_train_v11.py` | docstring |
-| `grpo_quad_train_v12.py` | docstring |
+| `grpo_quad_train_v10.py` | `_patch_vllm_for_trl()` shim + docstring |
+| `grpo_quad_train_v11.py` | `_patch_vllm_for_trl()` shim + docstring |
+| `grpo_quad_train_v12.py` | `_patch_vllm_for_trl()` shim + docstring |
 | `Esquadratics/utils/worker_extn.py` | API fix — robust import |
 | `Esquadratics/es_eval_quadratic.py` | API fix — `torch.load` |
 | `CHANGES.md` | **this file** |
