@@ -3,8 +3,8 @@
 #SBATCH --partition=rtx3080
 #SBATCH --gres=gpu:rtx3080:1
 #SBATCH --time=12:00:00
-#SBATCH --output=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.out
-#SBATCH --error=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.err
+#SBATCH --output=/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/result_%j/%x_%j.out
+#SBATCH --error=/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/result_%j/%x_%j.err
 #SBATCH --export=NONE
 
 unset SLURM_EXPORT_ENV
@@ -47,7 +47,7 @@ print("peft:", peft.__version__)
 PY
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"
+BASE_DIR="/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS"
 TRAIN_PARQUET="${BASE_DIR}/Dataset/quad_medhard_train.parquet"
 TEST_PARQUET="${BASE_DIR}/Dataset/quad_medhard_eval.parquet"
 MODEL_DIR="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct"
