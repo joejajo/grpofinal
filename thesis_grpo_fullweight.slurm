@@ -1,7 +1,7 @@
 #!/bin/bash -l
+#SBATCH --job-name=thesis_grpo_fullweight
 #SBATCH --partition=a100
 #SBATCH --gres=gpu:a100:1
-#SBATCH --job-name=thesis_grpo_fullweight
 #SBATCH --time=12:00:00
 #SBATCH --output=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.out
 #SBATCH --error=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.err
@@ -10,22 +10,55 @@
 unset SLURM_EXPORT_ENV
 set -eo pipefail
 
+# ── Environment ───────────────────────────────────────────────────────────────
 module purge
-module load cuda/12.4.1
 module load python/3.12-conda
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
 set +u
-conda activate myenv
+conda activate /home/woody/iwi7/iwi7107h/conda_envs/grpo_vllm011
 set -u
 
+# ── HF cache ──────────────────────────────────────────────────────────────────
+export HF_HOME=/home/woody/iwi7/iwi7107h/hf_home
+export HF_HUB_CACHE=/home/woody/iwi7/iwi7107h/hf_home/hub
+export HF_DATASETS_CACHE=/home/woody/iwi7/iwi7107h/hf_home/datasets
+unset TRANSFORMERS_CACHE
+
+# ── FAU proxy ─────────────────────────────────────────────────────────────────
+export http_proxy=http://proxy.nhr.fau.de:80
+export https_proxy=http://proxy.nhr.fau.de:80
+
+# ── Verification ──────────────────────────────────────────────────────────────
+echo "Python path: $(which python)"
+python --version
+
+python - <<'PY'
+import torch, transformers, trl, vllm, accelerate, peft
+print("torch:", torch.__version__)
+print("torch CUDA:", torch.version.cuda)
+print("CUDA available:", torch.cuda.is_available())
+print("GPU:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "NO GPU")
+print("transformers:", transformers.__version__)
+print("trl:", trl.__version__)
+print("vllm:", vllm.__version__)
+print("accelerate:", accelerate.__version__)
+print("peft:", peft.__version__)
+PY
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
 BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"
 TRAIN_PARQUET="${BASE_DIR}/Dataset/quad_medhard_train.parquet"
 TEST_PARQUET="${BASE_DIR}/Dataset/quad_medhard_eval.parquet"
-MODEL_DIR="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
+MODEL_DIR="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct"
 OUT_DIR="${BASE_DIR}/Output/result_${SLURM_JOB_ID}"
 mkdir -p "${OUT_DIR}"
 
+SCRIPT="${BASE_DIR}/grpo_quad_train_v12.py"
+PLOT_SCRIPT="${BASE_DIR}/plot_grpo_results.py"
+PLOTS_DIR="${OUT_DIR}/plots"
+
+# ── Runtime env ───────────────────────────────────────────────────────────────
 export PYTHONUNBUFFERED=1
 export TOKENIZERS_PARALLELISM=false
 export TF_ENABLE_ONEDNN_OPTS=0
@@ -33,10 +66,7 @@ export NCCL_IB_DISABLE=1
 export NCCL_P2P_DISABLE=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128
 
-SCRIPT="${BASE_DIR}/grpo_quad_train_v12.py"
-PLOT_SCRIPT="${BASE_DIR}/plot_grpo_results.py"
-PLOTS_DIR="${OUT_DIR}/plots"
-
+# ── Training (full weights — A100 40 GB) ─────────────────────────────────────
 accelerate launch \
   --num_processes 1 \
   --num_machines 1 \
@@ -78,7 +108,7 @@ accelerate launch \
   --top_p                   0.95 \
   \
   --use_vllm \
-  --vllm_gpu_memory_utilization 0.45 \
+  --vllm_gpu_memory_utilization 0.50 \
   \
   --min_think_chars         80 \
   --reward_debug_every      20 \
@@ -86,11 +116,12 @@ accelerate launch \
   --debug_print_equation \
   --debug_print_effective
 
+# ── Post-training plots ───────────────────────────────────────────────────────
 mkdir -p "${PLOTS_DIR}"
 if [ -f "${PLOT_SCRIPT}" ]; then
   python "${PLOT_SCRIPT}" --exp_dir "${OUT_DIR}" --save_dir "${PLOTS_DIR}" || true
 fi
 
 echo "TensorBoard logdir: ${OUT_DIR}/tb"
-echo "Plots directory: ${PLOTS_DIR}"
-echo "Job complete: ${SLURM_JOB_ID}"
+echo "Plots directory:    ${PLOTS_DIR}"
+echo "Job complete:       ${SLURM_JOB_ID}"
