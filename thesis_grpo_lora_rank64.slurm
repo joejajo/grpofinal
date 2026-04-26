@@ -102,6 +102,8 @@ accelerate launch \
   --jsonl_train_every_steps 100 \
   --grpo_max_samples        500 \
   \
+  --loss_type               dr_grpo \
+  \
   --lora_r                  64 \
   --lora_alpha              128 \
   --lora_dropout            0.05 \

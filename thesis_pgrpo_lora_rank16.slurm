@@ -1,7 +1,7 @@
 #!/bin/bash -l
-#SBATCH --job-name=thesis_grpo_fullweight
-#SBATCH --partition=a100
-#SBATCH --gres=gpu:a100:1
+#SBATCH --job-name=thesis_pgrpo_lora16
+#SBATCH --partition=rtx3080
+#SBATCH --gres=gpu:rtx3080:1
 #SBATCH --time=12:00:00
 #SBATCH --output=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.out
 #SBATCH --error=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.err
@@ -66,7 +66,7 @@ export NCCL_IB_DISABLE=1
 export NCCL_P2P_DISABLE=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128
 
-# ── Training (full weights — A100 40 GB) ─────────────────────────────────────
+# ── Training (pure GRPO, LoRA rank=16 — RTX 3080 conservative settings) ──────
 accelerate launch \
   --num_processes 1 \
   --num_machines 1 \
@@ -81,15 +81,15 @@ accelerate launch \
   --tb_log_dir              "${OUT_DIR}/tb" \
   \
   --max_steps               2000 \
-  --learning_rate           1e-6 \
+  --learning_rate           1.5e-6 \
   --warmup_steps            100 \
   --seed                    42 \
   --beta                    0.002 \
-  --num_generations         12 \
+  --num_generations         4 \
   --per_device_batch_size   1 \
-  --grad_accum_steps        24 \
+  --grad_accum_steps        8 \
   --max_prompt_length       512 \
-  --max_completion_length   1024 \
+  --max_completion_length   512 \
   \
   --eval_every_steps        50 \
   --eval_max_samples        0 \
@@ -102,15 +102,17 @@ accelerate launch \
   --jsonl_train_every_steps 100 \
   --grpo_max_samples        500 \
   \
-  --loss_type               dr_grpo \
+  --loss_type               grpo \
   \
-  --disable_lora \
+  --lora_r                  16 \
+  --lora_alpha              32 \
+  --lora_dropout            0.05 \
   \
   --temperature             0.80 \
   --top_p                   0.95 \
   \
   --use_vllm \
-  --vllm_gpu_memory_utilization 0.50 \
+  --vllm_gpu_memory_utilization 0.35 \
   \
   --min_think_chars         80 \
   --reward_debug_every      20 \

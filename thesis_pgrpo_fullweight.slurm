@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=thesis_grpo_fullweight
+#SBATCH --job-name=thesis_pgrpo_fullweight
 #SBATCH --partition=a100
 #SBATCH --gres=gpu:a100:1
 #SBATCH --time=12:00:00
@@ -66,7 +66,7 @@ export NCCL_IB_DISABLE=1
 export NCCL_P2P_DISABLE=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128
 
-# ── Training (full weights — A100 40 GB) ─────────────────────────────────────
+# ── Training (pure GRPO, full weights — A100 40 GB) ──────────────────────────
 accelerate launch \
   --num_processes 1 \
   --num_machines 1 \
@@ -102,7 +102,7 @@ accelerate launch \
   --jsonl_train_every_steps 100 \
   --grpo_max_samples        500 \
   \
-  --loss_type               dr_grpo \
+  --loss_type               grpo \
   \
   --disable_lora \
   \

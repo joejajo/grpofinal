@@ -1093,6 +1093,9 @@ def main():
     ap.add_argument("--learning_rate", type=float, default=1e-6)
     ap.add_argument("--warmup_steps", type=int, default=30)
     ap.add_argument("--beta", type=float, default=0.002)  # v12: 0.001->0.002 for harder task stability
+    ap.add_argument("--loss_type", type=str, default="dr_grpo",
+                    choices=["grpo", "dr_grpo", "dapo", "bnpo"],
+                    help="GRPO loss variant: 'grpo' = original (std-normalised), 'dr_grpo' = token-normalised (no length bias)")
     ap.add_argument("--seed", type=int, default=42)
 
     ap.add_argument("--per_device_batch_size", type=int, default=1)
@@ -1372,7 +1375,7 @@ def main():
         fp16=False,
         bf16=True,    # v11-fix: Qwen2.5 is bf16-native; RTX 3080 (Ampere) supports bf16
 
-        loss_type="dr_grpo",
+        loss_type=args.loss_type,
         beta=args.beta,
         scale_rewards=True,
 
