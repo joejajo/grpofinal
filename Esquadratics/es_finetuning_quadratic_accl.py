@@ -36,6 +36,7 @@ import argparse
 import csv
 from datetime import datetime
 import gc
+import glob
 import json
 import os
 import random
@@ -1000,6 +1001,11 @@ def main(args):
                 )
             )
             print(f"Checkpoint saved: {ckpt_path}")
+            # Keep only the latest checkpoint — delete all older ones
+            for old_ckpt in sorted(glob.glob(f"{model_saves_dir}/checkpoint_iter_*")):
+                if old_ckpt != ckpt_path:
+                    shutil.rmtree(old_ckpt)
+                    print(f"Deleted old checkpoint: {old_ckpt}")
 
         print(f"=== Iteration {i} finished ===\n")
 

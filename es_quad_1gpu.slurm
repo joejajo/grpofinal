@@ -122,4 +122,16 @@ else
     echo "Skipping post-training evaluation."
 fi
 
+# ── Post-training plots ────────────────────────────────────────────────────────
+PLOTS_DIR="${OUT_DIR}/plots"
+mkdir -p "${PLOTS_DIR}"
+if [ -n "${ES_EXP_DIR}" ] && [ -f "${BASE_DIR}/plot_es_results.py" ]; then
+    python "${BASE_DIR}/plot_es_results.py" \
+      --exp_dir  "${ES_EXP_DIR}" \
+      --save_dir "${PLOTS_DIR}" \
+      --eval_dir "${EVAL_OUT}" || true
+    echo "Plots saved: ${PLOTS_DIR}"
+fi
+
+echo "TensorBoard logdir: ${ES_EXP_DIR}"
 echo "Job complete: ${SLURM_JOB_ID}"
