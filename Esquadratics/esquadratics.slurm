@@ -22,7 +22,7 @@ module load python/3.12-conda
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
 set +u
-conda activate myenv
+conda activate grpo
 set -u
 
 BASE_DIR="/home/woody/iwi7/iwi7107h/Esquadratics"
@@ -30,7 +30,7 @@ DATA_PARQUET="${BASE_DIR}/Dataset/quad_medhard_train.parquet"
 EVAL_PARQUET="${BASE_DIR}/Dataset/quad_medhard_eval.parquet"
 MODEL_DIR="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
 OUT_DIR="${BASE_DIR}/outputs/result_${SLURM_JOB_ID}"
-NUM_ITERS=500
+NUM_ITERS=1000
 mkdir -p "${OUT_DIR}"
 
 export PYTHONUNBUFFERED=1
@@ -56,7 +56,8 @@ python "${SCRIPT}" \
   --data_sample             500 \
   --data_path               "${DATA_PARQUET}" \
   --eval_data               "${EVAL_PARQUET}" \
-  --eval_every_iters        1 \
+  --temperature             0.6 \
+  --eval_every_iters        20 \
   --experiment_dir          "${OUT_DIR}/es_experiment" \
   --max_tokens              1024 \
   --dtype                   float16 \

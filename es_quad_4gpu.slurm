@@ -27,6 +27,7 @@ set -u
 
 BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"
 DATA_PARQUET="${BASE_DIR}/Dataset/quad_medhard_train.parquet"
+EVAL_PARQUET="${BASE_DIR}/Dataset/quad_medhard_eval.parquet"
 MODEL_DIR="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct/"
 OUT_DIR="${BASE_DIR}/Output/result_${SLURM_JOB_ID}"
 mkdir -p "${OUT_DIR}"
@@ -45,15 +46,18 @@ python "${SCRIPT}" \
   --cuda_devices            0,1,2,3 \
   --num_engines             4 \
   --population_size         30 \
-  --num_iterations          500 \
+  --num_iterations          1000 \
   --sigma                   0.001 \
   --alpha                   0.0005 \
-  --data_sample             0 \
+  --temperature             0.6 \
+  --data_sample             500 \
   --data_path               "${DATA_PARQUET}" \
+  --eval_data               "${EVAL_PARQUET}" \
+  --eval_every_iters        20 \
   --experiment_dir          "${OUT_DIR}/es_experiment" \
   --max_tokens              1024 \
   --dtype                   float16 \
-  --csv_every_iters         50 \
+  --csv_every_iters         1 \
   --verbose
 
 echo "ES experiment dir: ${OUT_DIR}/es_experiment"

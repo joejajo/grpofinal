@@ -1,15 +1,16 @@
 #!/bin/bash -l
 #SBATCH --partition=rtx3080
-#SBATCH --gres=gpu:rtx3080:1
+#SBATCH --gres=gpu:rtx3080:2
 #SBATCH --time=12:00:00
 #SBATCH --output=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.out
 #SBATCH --error=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.err
 #SBATCH --export=NONE
 
 # =============================================================================
-#  ES Quadratic Roots — 1-GPU SLURM script
+#  ES Quadratic Roots — 2-GPU SLURM script
 #
-#  Single vLLM engine on 1 RTX 3080.
+#  2 vLLM engines across 2 RTX 3080s.
+#  Seeds are distributed round-robin across engines for parallelism.
 # =============================================================================
 
 unset SLURM_EXPORT_ENV
@@ -42,9 +43,9 @@ SCRIPT="${BASE_DIR}/Esquadratics/es_finetuning_quadratic_accl.py"
 
 python "${SCRIPT}" \
   --model_name              "${MODEL_DIR}" \
-  --cuda_devices            0 \
-  --num_engines             1 \
-  --population_size         20 \
+  --cuda_devices            0,1 \
+  --num_engines             2 \
+  --population_size         30 \
   --num_iterations          1000 \
   --sigma                   0.001 \
   --alpha                   0.0005 \

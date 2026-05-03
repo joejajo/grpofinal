@@ -172,11 +172,11 @@ def _append_eval_csv(path: str, rows: list) -> None:
             writer.writerow(row)
 
 
-def _run_periodic_eval(engine, eval_task_datas, iteration, max_tokens, eval_csv_path, writer):
+def _run_periodic_eval(engine, eval_task_datas, iteration, max_tokens, eval_csv_path, writer, temperature=0.6):
     """Run evaluation on held-out eval set using engine 0 (unperturbed weights)."""
     prompts = [d["context"] for d in eval_task_datas]
     sampling_params = SamplingParams(
-        temperature=0.0,
+        temperature=temperature,
         seed=42,
         max_tokens=max_tokens,
     )
@@ -321,7 +321,7 @@ SIGMA = 0.001           # noise standard deviation for perturbation
 ALPHA = 0.0005          # learning rate for ES update
 POPULATION_SIZE = 30    # number of perturbation seeds per iteration
 NUM_ENGINES = 4         # number of vLLM engines (one per GPU)
-NUM_ITERATIONS = 500   # total ES iterations
+NUM_ITERATIONS = 1000  # total ES iterations (matches original paper)
 EXPERIMENT_DIR = "es-ft-quadratic-experiment"
 DATA_SAMPLE = 200       # number of dataset samples to evaluate per seed
 
@@ -367,6 +367,8 @@ def parse_args():
                         help="Number of dataset samples to evaluate per perturbation")
     parser.add_argument("--data_path", type=str, default="",
                         help="Path to parquet dataset; default uses Dataset/quad_medhard_train.parquet")
+    parser.add_argument("--temperature", type=float, default=0.6,
+                        help="Sampling temperature for generation (training and eval)")
     parser.add_argument("--verbose", action="store_true", help="Print verbose logs")
     parser.add_argument("--max_tokens", type=int, default=1024,
                         help="Max tokens for vLLM generation")
@@ -380,7 +382,7 @@ def parse_args():
                         help="Max samples to log per CSV write; 0 logs all")
     parser.add_argument("--eval_data", type=str, default="",
                         help="Path to eval parquet for periodic evaluation during training")
-    parser.add_argument("--eval_every_iters", type=int, default=50,
+    parser.add_argument("--eval_every_iters", type=int, default=20,
                         help="Run evaluation every N iterations; 0 disables")
     args = parser.parse_args()
 
@@ -503,11 +505,11 @@ def load_quadratic_data(data_path, tokenizer, data_sample=200):
 
 # ── Evaluation ──────────────────────────────────────────────────────────────
 
-def evaluate_quadratic_handle(llm, task_datas, max_tokens=1024):
+def evaluate_quadratic_handle(llm, task_datas, max_tokens=1024, temperature=0.6):
     """Submit async generation for all prompts on one engine."""
     prompts = [d["context"] for d in task_datas]
     sampling_params = SamplingParams(
-        temperature=0.0,
+        temperature=temperature,
         seed=42,
         max_tokens=max_tokens,
     )
@@ -698,6 +700,7 @@ def main(args):
         "data_sample": args.data_sample,
         "max_tokens": args.max_tokens,
         "dtype": args.dtype,
+        "temperature": args.temperature,
         "global_seed": args.global_seed,
         "eval_data": args.eval_data,
         "eval_every_iters": args.eval_every_iters,
@@ -733,6 +736,7 @@ def main(args):
 
     # ── ES training loop ────────────────────────────────────────────────────
     best_reward = -float("inf")
+    prev_ckpt_path = None
 
     for i in range(args.num_iterations):
         print(f"\n\n=== Iteration {i} ===")
@@ -755,7 +759,7 @@ def main(args):
                 break
             # Add exploration noise
             ray.get(llm.collective_rpc.remote("perturb_self_weights", args=(seed, args.sigma, False)))
-            handle, start_ts = evaluate_quadratic_handle(llm, task_datas, args.max_tokens)
+            handle, start_ts = evaluate_quadratic_handle(llm, task_datas, args.max_tokens, args.temperature)
             inflight[handle] = {
                 "engine": llm,
                 "engine_idx": eng_idx,
@@ -788,7 +792,7 @@ def main(args):
                 continue
 
             ray.get(llm.collective_rpc.remote("perturb_self_weights", args=(next_seed, args.sigma, False)))
-            handle, start_ts = evaluate_quadratic_handle(llm, task_datas, args.max_tokens)
+            handle, start_ts = evaluate_quadratic_handle(llm, task_datas, args.max_tokens, args.temperature)
             inflight[handle] = {
                 "engine": llm,
                 "engine_idx": meta["engine_idx"],
@@ -945,7 +949,7 @@ def main(args):
 
         # Periodic evaluation on held-out eval set
         if eval_task_datas and eval_every > 0 and (i % eval_every == 0 or i == args.num_iterations - 1):
-            _run_periodic_eval(engines[0], eval_task_datas, i, args.max_tokens, eval_csv_path, writer)
+            _run_periodic_eval(engines[0], eval_task_datas, i, args.max_tokens, eval_csv_path, writer, args.temperature)
 
         # Compute ES update ONLY on engine 0
         per_seed_coeffs = [
@@ -990,7 +994,7 @@ def main(args):
         }, i)
         print(f"Wall clock time for iteration {i}: {t_total:.2f}s")
 
-        # Periodic checkpointing
+        # Periodic checkpointing (delete previous to save disk space)
         if (i + 1) % 100 == 0 or i == args.num_iterations - 1:
             ckpt_path = f"{model_saves_dir}/checkpoint_iter_{i+1}"
             os.makedirs(ckpt_path, exist_ok=True)
@@ -1000,6 +1004,10 @@ def main(args):
                 )
             )
             print(f"Checkpoint saved: {ckpt_path}")
+            if prev_ckpt_path and os.path.exists(prev_ckpt_path):
+                shutil.rmtree(prev_ckpt_path)
+                print(f"Deleted previous checkpoint: {prev_ckpt_path}")
+            prev_ckpt_path = ckpt_path
 
         print(f"=== Iteration {i} finished ===\n")
 
