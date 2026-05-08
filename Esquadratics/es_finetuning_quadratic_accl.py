@@ -382,6 +382,16 @@ def parse_args():
                         help="Path to eval parquet for periodic evaluation during training")
     parser.add_argument("--eval_every_iters", type=int, default=50,
                         help="Run evaluation every N iterations; 0 disables")
+    # LoRA ES options
+    parser.add_argument("--use_lora", action="store_true",
+                        help="Use LoRA-subspace perturbations (low-rank ES update)")
+    parser.add_argument("--lora_r", type=int, default=16,
+                        help="LoRA rank for ES perturbations")
+    parser.add_argument("--lora_alpha", type=float, default=32.0,
+                        help="LoRA alpha (scaling factor; logged for reference)")
+    parser.add_argument("--lora_target_modules", type=str, default="",
+                        help="Comma-separated param name suffixes to perturb "
+                             "(default: q_proj.weight,v_proj.weight,k_proj.weight,o_proj.weight)")
     args = parser.parse_args()
 
     # Scope host GPU visibility; vLLM actors use placement groups for device assignment
@@ -667,6 +677,20 @@ def main(args):
     ])
     print("NCCL inter-engine communication initialized")
 
+    # Init LoRA perturbation mode if requested
+    if args.use_lora:
+        lora_targets = (
+            [s.strip() for s in args.lora_target_modules.split(",") if s.strip()]
+            if args.lora_target_modules
+            else ["q_proj.weight", "v_proj.weight", "k_proj.weight", "o_proj.weight"]
+        )
+        print(f"\nLoRA ES mode: r={args.lora_r}, alpha={args.lora_alpha}, targets={lora_targets}")
+        counts = ray.get([
+            e.collective_rpc.remote("init_lora_mode", args=(args.lora_r, lora_targets))
+            for e in engines
+        ])
+        print(f"LoRA mode active on {len(engines)} engine(s), matched param counts: {counts}")
+
     def cleanup():
         for llm in engines:
             try:
@@ -702,6 +726,10 @@ def main(args):
         "eval_data": args.eval_data,
         "eval_every_iters": args.eval_every_iters,
         "task": "quadratic_integer_roots",
+        "use_lora": args.use_lora,
+        "lora_r": args.lora_r if args.use_lora else None,
+        "lora_alpha": args.lora_alpha if args.use_lora else None,
+        "lora_target_modules": args.lora_target_modules if args.use_lora else None,
     }
     with open(f"{logging_dir}/config.json", "w") as f:
         json.dump(config, f, indent=2)
@@ -729,6 +757,9 @@ def main(args):
     print(f"\n{'='*80}")
     print(f"Starting ES fine-tuning: {args.num_iterations} iterations, "
           f"pop_size={args.population_size}, sigma={args.sigma}, alpha={args.alpha}")
+    if args.use_lora:
+        print(f"LoRA ES: r={args.lora_r}, alpha={args.lora_alpha} "
+              f"(perturbations restricted to LoRA target layers only)")
     print(f"{'='*80}\n")
 
     # ── ES training loop ────────────────────────────────────────────────────

@@ -2,11 +2,12 @@
 vLLM Worker Extension for ES Fine-Tuning (Quadratic Task).
 
 Provides GPU-resident methods invoked via collective_rpc from the ES trainer:
-  - perturb_self_weights  : add Gaussian noise to all model parameters
+  - perturb_self_weights  : add Gaussian noise to model parameters (full or LoRA-subspace)
   - restore_self_weights  : subtract the same noise to restore original weights
   - init_inter_engine_group : set up NCCL communication between engines
   - broadcast_all_weights : sync weights from source engine to all via NCCL
   - save_self_weights_to_disk : checkpoint model state to disk
+  - init_lora_mode        : enable low-rank perturbations (LoRA ES)
 
 Adapted from VsonicV/es-fine-tuning-paper utils/worker_extn.py
 """
@@ -28,34 +29,82 @@ def _stateless_init_process_group(master_address, master_port, rank, world_size,
 class WorkerExtension:
     """
     Methods used by the ES trainer:
+    - init_lora_mode(lora_r, lora_target_suffixes)
     - perturb_self_weights(seed, sigma_or_scale, negate=False)
     - restore_self_weights(seed, SIGMA)
     - init_inter_engine_group(master_address, master_port, rank, world_size)
     - broadcast_all_weights(src_rank)
     - save_self_weights_to_disk(filepath)
+
+    LoRA ES mode: when init_lora_mode is called, perturbations are restricted to
+    named LoRA target parameters and use low-rank noise (delta = noise_B @ noise_A / sqrt(r))
+    instead of full-dimensional Gaussian noise. Non-target parameters are frozen.
     """
+
+    def init_lora_mode(self, lora_r: int, lora_target_suffixes: list):
+        """Enable LoRA-subspace perturbations restricted to specified param name suffixes."""
+        self._lora_mode = True
+        self._lora_r = int(lora_r)
+        self._lora_target_suffixes = set(lora_target_suffixes)
+        matched = [
+            name for name, p in self.model_runner.model.named_parameters()
+            if p.ndim == 2 and any(name.endswith(s) for s in self._lora_target_suffixes)
+        ]
+        print(
+            f"[LoRA ES] r={self._lora_r}, suffixes={sorted(self._lora_target_suffixes)}, "
+            f"matched {len(matched)} weight tensors"
+        )
+        if matched:
+            print(f"[LoRA ES] example targets: {matched[:4]}{'...' if len(matched) > 4 else ''}")
+        return len(matched)
+
+    def _is_lora_target(self, name: str, p: "torch.Tensor") -> bool:
+        if not getattr(self, "_lora_mode", False):
+            return False
+        return p.ndim == 2 and any(name.endswith(s) for s in self._lora_target_suffixes)
 
     def perturb_self_weights(self, seed, noise_scale, negate=False):
         scale = float(noise_scale)
         sign = -1.0 if negate else 1.0
-        for _, p in self.model_runner.model.named_parameters():
+        lora_mode = getattr(self, "_lora_mode", False)
+        lora_r = getattr(self, "_lora_r", 16)
+        for name, p in self.model_runner.model.named_parameters():
             gen = torch.Generator(device=p.device)
             gen.manual_seed(int(seed))
-            noise = torch.randn(p.shape, dtype=p.dtype, device=p.device, generator=gen)
-            p.data.add_(sign * scale * noise)
-            del noise
+            if self._is_lora_target(name, p):
+                out_f, in_f = p.shape
+                noise_A = torch.randn(lora_r, in_f, dtype=p.dtype, device=p.device, generator=gen)
+                noise_B = torch.randn(out_f, lora_r, dtype=p.dtype, device=p.device, generator=gen)
+                delta = (noise_B @ noise_A) * (lora_r ** -0.5)
+                p.data.add_(sign * scale * delta)
+                del noise_A, noise_B, delta
+            elif not lora_mode:
+                noise = torch.randn(p.shape, dtype=p.dtype, device=p.device, generator=gen)
+                p.data.add_(sign * scale * noise)
+                del noise
+            # lora_mode + non-target param: frozen, skip
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         torch.cuda.empty_cache()
         return True
 
     def restore_self_weights(self, seed, SIGMA):
-        for _, p in self.model_runner.model.named_parameters():
+        lora_mode = getattr(self, "_lora_mode", False)
+        lora_r = getattr(self, "_lora_r", 16)
+        for name, p in self.model_runner.model.named_parameters():
             gen = torch.Generator(device=p.device)
             gen.manual_seed(int(seed))
-            noise = torch.randn(p.shape, dtype=p.dtype, device=p.device, generator=gen)
-            p.data.add_(-float(SIGMA) * noise)
-            del noise
+            if self._is_lora_target(name, p):
+                out_f, in_f = p.shape
+                noise_A = torch.randn(lora_r, in_f, dtype=p.dtype, device=p.device, generator=gen)
+                noise_B = torch.randn(out_f, lora_r, dtype=p.dtype, device=p.device, generator=gen)
+                delta = (noise_B @ noise_A) * (lora_r ** -0.5)
+                p.data.add_(-float(SIGMA) * delta)
+                del noise_A, noise_B, delta
+            elif not lora_mode:
+                noise = torch.randn(p.shape, dtype=p.dtype, device=p.device, generator=gen)
+                p.data.add_(-float(SIGMA) * noise)
+                del noise
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         torch.cuda.empty_cache()
