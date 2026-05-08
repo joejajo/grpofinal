@@ -3,8 +3,8 @@
 #SBATCH --partition=a100
 #SBATCH --gres=gpu:a100:1
 #SBATCH --time=12:00:00
-#SBATCH --output=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.out
-#SBATCH --error=/home/woody/iwi7/iwi7107h/GRPO_Quad/Output/result_%j/%x_%j.err
+#SBATCH --output=/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/%x_%j.out
+#SBATCH --error=/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/%x_%j.err
 #SBATCH --export=NONE
 
 unset SLURM_EXPORT_ENV
