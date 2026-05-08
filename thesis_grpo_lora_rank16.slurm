@@ -85,7 +85,7 @@ accelerate launch \
   --warmup_steps            100 \
   --seed                    42 \
   --beta                    0.002 \
-  --num_generations         4 \
+  --num_generations         8 \
   --per_device_batch_size   1 \
   --grad_accum_steps        8 \
   --max_prompt_length       512 \
