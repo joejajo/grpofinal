@@ -98,7 +98,7 @@ accelerate launch \
   --max_completion_length   512 \
   \
   --eval_every_steps        50 \
-  --eval_max_samples        0 \
+  --eval_max_samples        300 \
   --eval_batch_size         8 \
   --eval_max_new_tokens     512 \
   \
@@ -106,7 +106,7 @@ accelerate launch \
   --jsonl_export_dir        "${OUT_DIR}/jsonl" \
   --jsonl_num_examples      48 \
   --jsonl_train_every_steps 100 \
-  --grpo_max_samples        500 \
+  --grpo_max_samples        1000 \
   \
   --loss_type               grpo \
   --simple_reward \
