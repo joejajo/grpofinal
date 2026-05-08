@@ -53,7 +53,7 @@ print("peft:", peft.__version__)
 PY
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-BASE_DIR="/home/woody/iwi7/iwi7107h/GRPO_Quad"
+BASE_DIR="/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS"
 TRAIN_PARQUET="${BASE_DIR}/Dataset/quad_medhard_train.parquet"
 TEST_PARQUET="${BASE_DIR}/Dataset/quad_medhard_eval.parquet"
 MODEL_DIR="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct"
