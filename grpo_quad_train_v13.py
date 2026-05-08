@@ -2,17 +2,15 @@
 # -*- coding: utf-8 -*-
 
 """
-GRPO (Countdown/R1-style) for Quadratic Integer Roots  [v12]
-Compatible with: TRL 0.24.x + vLLM 0.10.2
+GRPO (Countdown/R1-style) for Quadratic Integer Roots  [v13]
+Compatible with: TRL 0.23.1 + vLLM 0.11.0
 
-v12 changes vs v11:
-  - Targets medium+hard only dataset (quad_medhard_train.parquet / quad_medhard_eval.parquet)
-    * No easy zone (|a|=1, roots [-5,5]) — model already saturated those in v11
-    * Medium: |a| in {1,2}, roots in [-9,9]   (~760 samples)
-    * Hard:   |a| in {1,2,3,4}, roots in [-15,15] (~1800 samples)
-    * Total train: 2560 rows; eval: 500 rows (|a| up to 5, held-out templates)
-  - max_steps raised 1500 -> 2000 (harder problems need more training signal)
-  - num_generations raised 8 -> 12 (wider group for better advantage estimation)
+v13 changes vs v12:
+  - Added simple_reward_func: 6-level step reward ablation
+    (both_exact|one_root|wrong) x (valid_clean|not) -> 1.0/0.7/0.5/0.3/0.1/0.0
+    No near-miss shaping, no Vieta partial credit, no reasoning bonus
+  - --simple_reward flag selects simple reward at runtime (default: dense)
+  - Recommended --num_generations 8 when using --simple_reward
   - per_device_batch_size raised 1 -> 2 so effective=32, prompts/step=32/12~=2
   - temperature raised 0.70 -> 0.80 (harder problems need more diversity to avoid zero-std collapse)
   - learning_rate lowered 2e-6 -> 1.5e-6 (conservative; harder dataset = noisier gradients)
@@ -765,6 +763,68 @@ class JsonlTrainingProbeCallback(TrainerCallback):
 
 
 # -----------------------
+# Simple binary-style reward (ablation)
+# -----------------------
+def simple_reward_func(
+    completions,
+    a=None, b=None, c=None,
+    r1=None, r2=None,
+    equation=None,
+    prompt=None,
+    trainer_state=None,
+    **kwargs
+) -> List[float]:
+    """
+    Simplified 6-level step reward for ablation comparison:
+      both_exact + valid_clean = 1.00
+      both_exact, no clean fmt  = 0.70
+      one_root   + valid_clean  = 0.50
+      one_root,  no clean fmt   = 0.30
+      wrong      + valid_clean  = 0.10
+      wrong,     no format      = 0.00
+    No near-miss shaping, no Vieta partial credit, no reasoning bonus.
+    num_generations should be >=8 to compensate for sparse signal.
+    """
+    n = len(completions)
+    rewards: List[float] = [0.0] * n
+
+    for i, comp in enumerate(completions):
+        txt = get_text(comp)
+        ai = safe_int(col_get(a, i))
+        bi = safe_int(col_get(b, i))
+        ci = safe_int(col_get(c, i))
+        if ai is None or bi is None or ci is None:
+            continue
+
+        parsed = parse_roots_from_answer(txt)
+        if parsed is None:
+            rewards[i] = 0.0
+            continue
+
+        pr1, pr2, _, _ = parsed
+        ok1, ok2, _, _ = verify_roots(ai, bi, ci, pr1, pr2)
+        both_exact = bool(ok1 and ok2)
+
+        _, mid_ok, _, bad_tags = format_grade(txt)
+        boxed_matches = list(BOXED_PAIR_RE.finditer(txt or ""))
+        has_boxed = bool(boxed_matches)
+        multiple = len(boxed_matches) > 1
+        trailing = (txt[boxed_matches[-1].end():].strip() != "") if has_boxed else False
+        valid_clean = mid_ok and has_boxed and not multiple and not bad_tags and not trailing
+
+        if both_exact:
+            r = 1.00 if valid_clean else 0.70
+        elif ok1 or ok2:
+            r = 0.50 if valid_clean else 0.30
+        else:
+            r = 0.10 if valid_clean else 0.00
+
+        rewards[i] = r
+
+    return rewards
+
+
+# -----------------------
 # Combined reward (single function)
 # -----------------------
 def combined_reward_func(
@@ -1096,6 +1156,9 @@ def main():
     ap.add_argument("--loss_type", type=str, default="dr_grpo",
                     choices=["grpo", "dr_grpo", "dapo", "bnpo"],
                     help="GRPO loss variant: 'grpo' = original (std-normalised), 'dr_grpo' = token-normalised (no length bias)")
+    ap.add_argument("--simple_reward", action="store_true",
+                    help="Use simple 6-level step reward instead of dense reward (ablation). "
+                         "Recommended: --num_generations 8 to compensate for sparse signal.")
     ap.add_argument("--seed", type=int, default=42)
 
     ap.add_argument("--per_device_batch_size", type=int, default=1)
@@ -1439,11 +1502,14 @@ def main():
                 eval_max_new_tokens,
             )
 
+    reward_fn = simple_reward_func if args.simple_reward else combined_reward_func
+    log.info(f"[REWARD] using {'simple (6-level step)' if args.simple_reward else 'dense (multi-component)'} reward function")
+
     trainer = GRPOTrainer(
         model=model,
         args=grpo_cfg,
         train_dataset=train_ds,
-        reward_funcs=[combined_reward_func],   # single reward
+        reward_funcs=[reward_fn],
         processing_class=tokenizer,
         peft_config=peft_cfg,
         callbacks=callbacks,

@@ -60,7 +60,7 @@ MODEL_DIR="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct"
 OUT_DIR="${BASE_DIR}/Output/result_${SLURM_JOB_ID}"
 mkdir -p "${OUT_DIR}"
 
-SCRIPT="${BASE_DIR}/grpo_quad_train_v12.py"
+SCRIPT="${BASE_DIR}/grpo_quad_train_v13.py"
 PLOT_SCRIPT="${BASE_DIR}/plot_grpo_results.py"
 PLOTS_DIR="${OUT_DIR}/plots"
 
