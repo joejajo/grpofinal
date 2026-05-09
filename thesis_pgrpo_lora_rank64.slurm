@@ -2,7 +2,7 @@
 #SBATCH --job-name=thesis_pgrpo_lora64
 #SBATCH --partition=rtx3080
 #SBATCH --gres=gpu:rtx3080:1
-#SBATCH --time=12:00:00
+#SBATCH --time=16:00:00
 #SBATCH --output=/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/%x_%j.out
 #SBATCH --error=/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/%x_%j.err
 #SBATCH --export=NONE
