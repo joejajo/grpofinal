@@ -129,3 +129,8 @@ fi
 echo "TensorBoard logdir: ${OUT_DIR}/tb"
 echo "Plots directory:    ${PLOTS_DIR}"
 echo "Job complete:       ${SLURM_JOB_ID}"
+
+# ── Copy logs into result dir ─────────────────────────────────────────────────
+sleep 1
+cp "${BASE_DIR}/Output/${SLURM_JOB_NAME}_${SLURM_JOB_ID}.out" "${OUT_DIR}/job.out" 2>/dev/null || true
+cp "${BASE_DIR}/Output/${SLURM_JOB_NAME}_${SLURM_JOB_ID}.err" "${OUT_DIR}/job.err" 2>/dev/null || true
