@@ -758,10 +758,11 @@ class JsonlTrainingProbeCallback(TrainerCallback):
             batch_size=self.batch_size,
             num_examples=self.num_examples,
         )
-        _write_jsonl(self.out_path, rows, append=True)
+        step_path = os.path.join(os.path.dirname(self.out_path), f"step_{state.global_step:06d}.jsonl")
+        _write_jsonl(step_path, rows, append=False)
         self._last_run_step = int(state.global_step)
         if rows:
-            log.info("[JSONL] wrote %d training rows at step=%d -> %s", len(rows), state.global_step, self.out_path)
+            log.info("[JSONL] wrote %d training rows at step=%d -> %s", len(rows), state.global_step, step_path)
 
 
 # -----------------------
@@ -1343,7 +1344,6 @@ def main():
             num_examples=args.jsonl_num_examples,
         )
         _write_jsonl(baseline_jsonl_path, baseline_rows, append=False)
-        open(training_jsonl_path, "w", encoding="utf-8").close()
         if baseline_rows:
             log.info("[JSONL] wrote baseline rows=%d -> %s", len(baseline_rows), baseline_jsonl_path)
 

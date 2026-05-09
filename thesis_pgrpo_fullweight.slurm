@@ -2,7 +2,7 @@
 #SBATCH --job-name=thesis_pgrpo_fullweight
 #SBATCH --partition=a100
 #SBATCH --gres=gpu:a100:1
-#SBATCH --time=12:00:00
+#SBATCH --time=16:00:00
 #SBATCH --output=/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/%x_%j.out
 #SBATCH --error=/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/%x_%j.err
 #SBATCH --export=NONE
@@ -96,7 +96,7 @@ accelerate launch \
   --eval_batch_size         8 \
   --eval_max_new_tokens     512 \
   \
-  --disable_csv_export \
+  --generation_csv_every_steps 0 \
   --jsonl_export_dir        "${OUT_DIR}/jsonl" \
   --jsonl_num_examples      48 \
   --jsonl_train_every_steps 100 \

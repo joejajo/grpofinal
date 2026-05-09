@@ -81,7 +81,7 @@ accelerate launch \
   --tb_log_dir              "${OUT_DIR}/tb" \
   \
   --max_steps               2000 \
-  --learning_rate           1.5e-6 \
+  --learning_rate           1e-6 \
   --warmup_steps            100 \
   --seed                    42 \
   --beta                    0.002 \
@@ -92,15 +92,15 @@ accelerate launch \
   --max_completion_length   512 \
   \
   --eval_every_steps        50 \
-  --eval_max_samples        0 \
+  --eval_max_samples        200 \
   --eval_batch_size         8 \
   --eval_max_new_tokens     512 \
   \
-  --disable_csv_export \
+  --generation_csv_every_steps 0 \
   --jsonl_export_dir        "${OUT_DIR}/jsonl" \
   --jsonl_num_examples      48 \
   --jsonl_train_every_steps 100 \
-  --grpo_max_samples        500 \
+  --grpo_max_samples        800 \
   \
   --loss_type               grpo \
   \
