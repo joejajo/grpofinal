@@ -184,6 +184,7 @@ class ExactAccuracyEvalCallback(TrainerCallback):
         max_prompt_length: int,
         max_new_tokens: int,
         eval_csv_path: str = "",
+        eval_jsonl_dir: str = "",
     ):
         self.eval_ds = eval_ds
         self.tokenizer = tokenizer
@@ -193,6 +194,7 @@ class ExactAccuracyEvalCallback(TrainerCallback):
         self.max_prompt_length = int(max_prompt_length)
         self.max_new_tokens = int(max_new_tokens)
         self.eval_csv_path = eval_csv_path
+        self.eval_jsonl_dir = eval_jsonl_dir
         self._last_run_step = -1
 
     def _compute_exact_metrics(self, model, step: int = 0) -> Dict[str, float]:
@@ -311,6 +313,12 @@ class ExactAccuracyEvalCallback(TrainerCallback):
 
         if self.eval_csv_path and csv_rows and is_rank0():
             _append_eval_csv(self.eval_csv_path, csv_rows)
+
+        if self.eval_jsonl_dir and csv_rows and is_rank0():
+            os.makedirs(self.eval_jsonl_dir, exist_ok=True)
+            eval_step_path = os.path.join(self.eval_jsonl_dir, f"eval_step_{step:06d}.jsonl")
+            _write_jsonl(eval_step_path, csv_rows, append=False)
+            log.info("[EVAL-JSONL] wrote %d rows at step=%d -> %s", len(csv_rows), step, eval_step_path)
 
         denom = float(max(1, seen))
         return {
@@ -1158,6 +1166,7 @@ def main():
     training_jsonl_path = os.path.join(jsonl_export_dir, "training_outputs.jsonl")
     post_jsonl_path = os.path.join(jsonl_export_dir, "post_eval_outputs.jsonl")
     jsonl_meta_path = os.path.join(jsonl_export_dir, "metadata.json")
+    eval_jsonl_dir = os.path.join(jsonl_export_dir, "eval") if jsonl_export_enabled else ""
     if jsonl_export_enabled:
         os.makedirs(jsonl_export_dir, exist_ok=True)
 
@@ -1428,6 +1437,7 @@ def main():
                 max_prompt_length=args.max_prompt_length,
                 max_new_tokens=eval_max_new_tokens,
                 eval_csv_path=EVAL_CSV_PATH,
+                eval_jsonl_dir=eval_jsonl_dir,
             )
         )
         if is_rank0():
@@ -1470,6 +1480,7 @@ def main():
             max_prompt_length=args.max_prompt_length,
             max_new_tokens=eval_max_new_tokens_bl,
             eval_csv_path=EVAL_CSV_PATH,
+            eval_jsonl_dir=eval_jsonl_dir,
         )
         baseline_eval_metrics = _bl_cb._compute_exact_metrics(model, step=0)
         log.info(
@@ -1511,6 +1522,7 @@ def main():
             max_prompt_length=args.max_prompt_length,
             max_new_tokens=eval_max_new_tokens,
             eval_csv_path=EVAL_CSV_PATH,
+            eval_jsonl_dir=eval_jsonl_dir,
         )
         final_step = int(getattr(trainer.state, "global_step", args.max_steps))
         LAST_EVAL_STATS = final_eval._compute_exact_metrics(trainer.model, step=final_step)
