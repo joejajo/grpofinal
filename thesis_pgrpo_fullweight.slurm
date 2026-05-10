@@ -2,7 +2,7 @@
 #SBATCH --job-name=thesis_pgrpo_fullweight
 #SBATCH --partition=a100
 #SBATCH --gres=gpu:a100:1
-#SBATCH --time=16:00:00
+#SBATCH --time=20:00:00
 #SBATCH --output=/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/%x_%j.out
 #SBATCH --error=/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/%x_%j.err
 #SBATCH --export=NONE
@@ -54,16 +54,6 @@ MODEL_DIR="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct"
 OUT_DIR="${BASE_DIR}/Output/result_${SLURM_JOB_ID}"
 mkdir -p "${OUT_DIR}"
 
-# ── Auto-resume from checkpoint ───────────────────────────────────────────────
-RESUME_CHECKPOINT="/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/result_1595874/checkpoint-1600"
-if [ -d "${RESUME_CHECKPOINT}" ]; then
-  echo "Resuming from checkpoint: ${RESUME_CHECKPOINT}"
-  RESUME_ARG="--resume_from_checkpoint ${RESUME_CHECKPOINT}"
-else
-  echo "No checkpoint found at ${RESUME_CHECKPOINT}, starting fresh."
-  RESUME_ARG=""
-fi
-
 SCRIPT="${BASE_DIR}/grpo_quad_train_v12.py"
 PLOT_SCRIPT="${BASE_DIR}/plot_grpo_results.py"
 PLOTS_DIR="${OUT_DIR}/plots"
@@ -95,14 +85,14 @@ accelerate launch \
   --warmup_steps            100 \
   --seed                    42 \
   --beta                    0.002 \
-  --num_generations         12 \
+  --num_generations         8 \
   --per_device_batch_size   1 \
   --grad_accum_steps        24 \
   --max_prompt_length       512 \
   --max_completion_length   1024 \
   \
   --eval_every_steps        50 \
-  --eval_max_samples        0 \
+  --eval_max_samples        300 \
   --eval_batch_size         8 \
   --eval_max_new_tokens     512 \
   \
@@ -110,7 +100,7 @@ accelerate launch \
   --jsonl_export_dir        "${OUT_DIR}/jsonl" \
   --jsonl_num_examples      48 \
   --jsonl_train_every_steps 100 \
-  --grpo_max_samples        500 \
+  --grpo_max_samples        1000 \
   \
   --loss_type               grpo \
   \
@@ -126,8 +116,7 @@ accelerate launch \
   --reward_debug_every      20 \
   --debug_show_n            8 \
   --debug_print_equation \
-  --debug_print_effective \
-  ${RESUME_ARG}
+  --debug_print_effective
 
 # ── Post-training plots ───────────────────────────────────────────────────────
 mkdir -p "${PLOTS_DIR}"
