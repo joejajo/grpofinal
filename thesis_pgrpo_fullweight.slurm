@@ -54,6 +54,16 @@ MODEL_DIR="/home/woody/iwi7/iwi7107h/models/Qwen2.5-0.5B-Instruct"
 OUT_DIR="${BASE_DIR}/Output/result_${SLURM_JOB_ID}"
 mkdir -p "${OUT_DIR}"
 
+# ── Auto-resume from checkpoint ───────────────────────────────────────────────
+RESUME_CHECKPOINT="/home/woody/iwi7/iwi7107h/GRPOQUADTHESIS/Output/result_1595874/checkpoint-1600"
+if [ -d "${RESUME_CHECKPOINT}" ]; then
+  echo "Resuming from checkpoint: ${RESUME_CHECKPOINT}"
+  RESUME_ARG="--resume_from_checkpoint ${RESUME_CHECKPOINT}"
+else
+  echo "No checkpoint found at ${RESUME_CHECKPOINT}, starting fresh."
+  RESUME_ARG=""
+fi
+
 SCRIPT="${BASE_DIR}/grpo_quad_train_v12.py"
 PLOT_SCRIPT="${BASE_DIR}/plot_grpo_results.py"
 PLOTS_DIR="${OUT_DIR}/plots"
@@ -116,7 +126,8 @@ accelerate launch \
   --reward_debug_every      20 \
   --debug_show_n            8 \
   --debug_print_equation \
-  --debug_print_effective
+  --debug_print_effective \
+  ${RESUME_ARG}
 
 # ── Post-training plots ───────────────────────────────────────────────────────
 mkdir -p "${PLOTS_DIR}"

@@ -1153,6 +1153,7 @@ def main():
     ap.add_argument("--lora_alpha", type=int, default=96)  # v12: 64->96 (keep ratio 2:1)
     ap.add_argument("--lora_dropout", type=float, default=0.05)
     ap.add_argument("--disable_lora", action="store_true", help="Disable LoRA and train full model weights.")
+    ap.add_argument("--resume_from_checkpoint", type=str, default="", help="Path to checkpoint dir to resume from; empty = start fresh.")
 
     args = ap.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
@@ -1509,7 +1510,8 @@ def main():
                 "GT Match": baseline_eval_metrics.get("eval/gt_match_rate", 0.0),
             }, 0)
 
-    trainer.train()
+    resume_ckpt = args.resume_from_checkpoint if args.resume_from_checkpoint else None
+    trainer.train(resume_from_checkpoint=resume_ckpt)
 
     if test_ds is not None:
         eval_max_new_tokens = args.eval_max_new_tokens if args.eval_max_new_tokens > 0 else args.max_completion_length
