@@ -113,7 +113,10 @@ class RewardBreakdownCallback(TrainerCallback):
         eq_r = LAST_REWARD_STATS.get("equation_reward_func", 0.0)
         fmt_r = LAST_REWARD_STATS.get("format_reward_func", 0.0)
         reas_r = LAST_REWARD_STATS.get("reasoning_reward_func", 0.0)
-        pen_r = LAST_REWARD_STATS.get("penalty_term", 0.0)
+        pen_mag = LAST_REWARD_STATS.get(
+            "penalty_magnitude",
+            LAST_REWARD_STATS.get("penalty_term", 0.0)
+        )
         pf = LAST_REWARD_STATS.get("parse_fail_rate", 0.0)
         both_r = LAST_REWARD_STATS.get("both_roots_rate", 0.0)
         one_r = LAST_REWARD_STATS.get("one_root_rate", 0.0)
@@ -123,12 +126,13 @@ class RewardBreakdownCallback(TrainerCallback):
         logs["rewards/equation_reward_func"] = eq_r
         logs["rewards/format_reward_func"] = fmt_r
         logs["rewards/reasoning_reward_func"] = reas_r
-        logs["rewards/penalty_term"] = pen_r
+        logs["rewards/penalty_magnitude"] = pen_mag
+        logs["rewards/penalty_term_signed"] = -pen_mag
         logs["rewards/parse_fail_rate"] = pf
         logs["rewards/both_roots_rate"] = both_r
         logs["rewards/one_root_rate"] = one_r
         logs["completion_length_chars"] = comp_len
-        logs["rewards/total_reward"] = eq_r + fmt_r + reas_r + pen_r
+        logs["rewards/total_reward_components"] = eq_r + fmt_r + reas_r - pen_mag
         for k, v in LAST_EVAL_STATS.items():
             logs[k] = v
 
@@ -146,11 +150,14 @@ class RewardBreakdownCallback(TrainerCallback):
             "Math (equation)": eq_r,
             "Format": fmt_r,
             "Reasoning": reas_r,
-            "Penalty (deduction)": pen_r,
+        }, step)
+
+        writer.add_scalars("Penalty Diagnostics", {
+            "Penalty magnitude": pen_mag,
         }, step)
 
         writer.add_scalars("Reward Overview", {
-            "Total Reward": eq_r + fmt_r + reas_r + pen_r,
+            "Component total reward": eq_r + fmt_r + reas_r - pen_mag,
             "Math Reward": eq_r,
         }, step)
 
@@ -984,7 +991,7 @@ def combined_reward_func(
         "equation_reward_func": _mean(eq_rewards),
         "format_reward_func": _mean(fmt_rewards),
         "reasoning_reward_func": _mean(reason_rewards),
-        "penalty_term": _mean(penalties),
+        "penalty_magnitude": _mean(penalties),
         "parse_fail_rate": (parse_fail / n) if n else 0.0,
         "both_roots_rate": (both / n) if n else 0.0,
         "one_root_rate": (one / n) if n else 0.0,
